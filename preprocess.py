@@ -8,13 +8,13 @@ from logging import getLogger
 
 from bitflyer_api import *
 from ai import *
-from manage import LOCAL
+from manage import LOCAL, BUCKET_NAME
+
 
 logger = getLogger(__name__)
 
 if not LOCAL:
-    import boto3
-    from io import StringIO
+    from aws import S3
 
 BALANCE_LOG_DIR = 'balance_log'
 EXECUTION_HISTORY_DIR = 'execute_history'
@@ -77,9 +77,16 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
         after = 0
 
         if p_save_path_row_all.exists():
-            df = pd.read_csv(str(p_save_path_row_all),
-                             index_col='exec_date', parse_dates=True)
+            if LOCAL:
+                df = pd.read_csv(str(p_save_path_row_all))
+            else:
+                s3 = S3(BUCKET_NAME)
+                df = s3.read_csv(str(p_save_path_row_all))
+
+            df['exec_date'] = pd.to_datetime(df['exec_date'])
+            df = df.set_index('exec_date')
             df = df.tz_convert(region)
+
             before = int(df.head(1)['id'])
             after = int(df.tail(1)['id'])
 
@@ -101,7 +108,8 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             df = pd.concat([df, df_new])
             df = df.sort_index()
             before = int(df.head(1)['id'])
-            time.sleep(0.25)
+            if LOCAL:
+                time.sleep(0.25)
 
         while df.tail(1).index[0] < target_date_end:
             df_new = get_executions(product_code, count, after=after)
@@ -111,7 +119,8 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             df = pd.concat([df, df_new])
             df = df.sort_index()
             after = int(df.tail(1)['id'])
-            time.sleep(0.25)
+            if LOCAL:
+                time.sleep(0.25)
 
         df = df.query('@target_date_start <= index < @target_date_end')
 
@@ -125,9 +134,24 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             df_buy = df.query('side == "BUY"')
             df_sell = df.query('side == "SELL"')
 
-            df.to_csv(str(p_save_path_row_all))
-            df_buy.to_csv(str(p_save_path_row_buy))
-            df_sell.to_csv(str(p_save_path_row_sell))
+            if LOCAL:
+                df.to_csv(str(p_save_path_row_all))
+                df_buy.to_csv(str(p_save_path_row_buy))
+                df_sell.to_csv(str(p_save_path_row_sell))
+            else:
+                s3 = S3(BUCKET_NAME)
+                s3.to_csv(
+                    str(p_save_path_row_all),
+                    df=df
+                )
+                s3.to_csv(
+                    str(p_save_path_row_buy),
+                    df=df_buy
+                )
+                s3.to_csv(
+                    str(p_save_path_row_sell),
+                    df=df_sell
+                )
 
             p_save_dir_1h = p_save_dir.joinpath('1h')
             p_save_dir_1m = p_save_dir.joinpath('1m')
@@ -170,7 +194,14 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
     df_buy_size = df_buy_size.resample(freq).sum()
     df_buy_resampled = pd.concat([df_buy_price, df_buy_size], axis=1)
     if not p_save_dir == '':
-        df_buy_resampled.to_csv(str(p_save_dir.joinpath('buy.csv')))
+        if LOCAL:
+            df_buy_resampled.to_csv(str(p_save_dir.joinpath('buy.csv')))
+        else:
+            s3 = S3(BUCKET_NAME)
+            s3.to_csv(
+                str(p_save_dir.joinpath('buy.csv')),
+                df=df_buy_resampled
+            )
 
     df_sell_price = df_sell[['price']]
     df_sell_size = df_sell[['size']]
@@ -178,7 +209,14 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
     df_sell_size = df_sell_size.resample(freq).sum()
     df_sell_resampled = pd.concat([df_sell_price, df_sell_size], axis=1)
     if not p_save_dir == '':
-        df_sell_resampled.to_csv(str(p_save_dir.joinpath('sell.csv')))
+        if LOCAL:
+            df_sell_resampled.to_csv(str(p_save_dir.joinpath('sell.csv')))
+        else:
+            s3 = S3(BUCKET_NAME)
+            s3.to_csv(
+                str(p_save_dir.joinpath('sell.csv')),
+                df=df_sell_resampled
+            )
 
     return df_buy_resampled, df_sell_resampled
 
@@ -188,8 +226,13 @@ def make_summary_from_scratch(p_dir):
     p_sell_path = p_dir.joinpath('sell.csv')
     p_summary_path = p_dir.joinpath('..', 'summary.csv')
 
-    df_buy = pd.read_csv(str(p_buy_path))
-    df_sell = pd.read_csv(str(p_sell_path))
+    if LOCAL:
+        df_buy = pd.read_csv(str(p_buy_path))
+        df_sell = pd.read_csv(str(p_sell_path))
+    else:
+        s3 = S3(BUCKET_NAME)
+        df_buy = s3.read_csv(str(p_buy_path))
+        df_sell = s3.read_csv(str(p_sell_path))
     df_summary = pd.DataFrame(
         [
             {
@@ -220,7 +263,15 @@ def make_summary_from_scratch(p_dir):
         ]
     )
 
-    df_summary.to_csv(str(p_summary_path), index=False)
+    if LOCAL:
+        df_summary.to_csv(str(p_summary_path), index=False)
+    else:
+        s3 = S3(BUCKET_NAME)
+        s3.to_csv(
+            str(p_summary_path),
+            df=df_summary,
+            index=False
+        )
 
     return df_summary
 
@@ -233,7 +284,15 @@ def make_summary_from_csv(p_dir='', p_summary_path_list=[], save=True):
     for p_summary_path in p_summary_path_list:
         if not p_summary_path.exists():
             continue
-        df_summary_child = pd.read_csv(str(p_summary_path), index_col=0)
+
+        if LOCAL:
+            df_summary_child = pd.read_csv(str(p_summary_path))
+        else:
+            aws = S3(BUCKET_NAME)
+            df_summary_child = aws.read_csv(str(p_summary_path))
+
+        df_summary_child = df_summary_child.set_index('CATEGORY', drop=True)
+
         if df_summary.empty:
             df_summary = df_summary_child.copy()
         else:
@@ -259,7 +318,15 @@ def make_summary_from_csv(p_dir='', p_summary_path_list=[], save=True):
 
     if save and p_dir != '':
         p_summary_save_path = p_dir.joinpath('summary.csv')
-        df_summary.to_csv(str(p_summary_save_path))
+
+        if LOCAL:
+            df_summary.to_csv(str(p_summary_save_path))
+        else:
+            s3 = S3(BUCKET_NAME)
+            s3.to_csv(
+                str(p_summary_save_path),
+                df=df_summary,
+            )
 
     return df_summary
 
@@ -421,7 +488,13 @@ def obtain_latest_summary(product_code, daily=False):
         save=False
     )
 
-    df_all_summary = pd.read_csv(p_all_summary_path, index_col=0)
+    if LOCAL:
+        df_all_summary = pd.read_csv(str(p_all_summary_path))
+    else:
+        s3 = S3(BUCKET_NAME)
+        df_all_summary = s3.read_csv(str(p_all_summary_path))
+
+    df_all_summary = df_all_summary.set_index('CATEGORY', drop=True)
 
     latest_summary = {
         'BUY': {

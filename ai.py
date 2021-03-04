@@ -2,14 +2,13 @@ from bitflyer_api import *
 import pandas as pd
 from pathlib import Path
 from logging import getLogger
-from manage import LOCAL
+from manage import LOCAL, BUCKET_NAME
 
 logger = getLogger(__name__)
 
 
 if not LOCAL:
-    import boto3
-    from io import StringIO
+    from aws import S3
 
 
 CHILD_ORDERS_DIR = 'child_orders'
@@ -20,15 +19,11 @@ class AI:
 
     """
 
-    def __init__(self, latest_summary, product_code='ETH_JPY', prices={}, small_size=0.01, middle_size=0.1, large_size=0.3, time_diff=9, region='Asia/Tokyo'):
+    def __init__(self, latest_summary, product_code='ETH_JPY', prices={}, small_size=0.01, middle_size=0.1, large_size=0.3, time_diff=9, region='Asia/Tokyo',
+                 bucket_name=''):
+
         if not LOCAL:
-            bucket_name = 'bitflyer-ai'
-            s3_get = boto3.client('s3')
-            # objkey = container_name + '/' + filename + '.csv'  # 多分普通のパス
-            # obj = s3_get.get_object(Bucket=bucket_name, Key=objkey)
-            # body = obj['Body'].read()
-            # bodystr = body.decode('utf-8')
-            # df = pd.read_csv(StringIO(bodystr))
+            self.s3 = S3(BUCKET_NAME)
 
         self.product_code = product_code
 
@@ -51,13 +46,17 @@ class AI:
             if self.p_child_orders_path[term].exists():
                 if LOCAL:
                     self.child_orders[term] = pd.read_csv(
-                        str(self.p_child_orders_path[term]), index_col=0)
+                        str(self.p_child_orders_path[term])
+                    )
                 else:
-                    obj = s3_get.get_object(Bucket=bucket_name, Key=str(
-                        self.p_child_orders_path[term]))
-                    body = obj['Body'].read()
-                    bodystr = body.decode('utf-8')
-                    self.child_orders[term] = pd.read_csv(StringIO(bodystr))
+                    self.child_orders[term] = self.s3.read_csv(
+                        str(self.p_child_orders_path[term])
+                    )
+
+                self.child_orders[term] = self.child_orders[term].set_index(
+                    'child_order_acceptance_id',
+                    drop=True
+                )
 
                 self.child_orders[term]['child_order_date'] = pd.to_datetime(
                     self.child_orders[term]['child_order_date'])
@@ -122,7 +121,14 @@ class AI:
                 self.child_orders[term].loc[child_order_acceptance_id] = child_orders_tmp.loc[child_order_acceptance_id]
 
         # csvファイルを更新
-        self.child_orders[term].to_csv(str(self.p_child_orders_path[term]))
+        if LOCAL:
+            self.child_orders[term].to_csv(str(self.p_child_orders_path[term]))
+        else:
+            self.s3.to_csv(
+                str(self.p_child_orders_path[term]),
+                df=self.child_orders[term]
+            )
+
         logger.info(f'{str(self.p_child_orders_path[term])} が更新されました。')
         if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED':
             logger.info(

@@ -1,6 +1,6 @@
 import datetime
 import pandas as pd
-from logging import basicConfig, StreamHandler, FileHandler, getLogger, Formatter, DEBUG
+from logging import basicConfig, StreamHandler, FileHandler, getLogger, Formatter, DEBUG, INFO
 
 from bitflyer_api import *
 from ai import *
@@ -18,13 +18,14 @@ if LOCAL:
 
     basicConfig(
         handlers=[sh, fh],
-        level=DEBUG,
+        level=INFO,
         # filename='./logs/bitflyer_ai.log',
         format=format, style='{'
     )
 else:
     basicConfig(
-        level=DEBUG
+        level=INFO,
+        format=format, style='{'
     )
 
 logger = getLogger(__name__)
