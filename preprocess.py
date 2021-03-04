@@ -1,13 +1,17 @@
-import time
-import datetime
 import json
-from pprint import pprint
-from pathlib import Path
-import numpy as np
+import datetime
+import time
 import pandas as pd
+from pathlib import Path
+from pprint import pprint
 
 from bitflyer_api import *
 from ai import *
+from manage import LOCAL
+
+if not LOCAL:
+    import boto3
+    from io import StringIO
 
 BALANCE_LOG_DIR = 'balance_log'
 EXECUTION_HISTORY_DIR = 'execute_history'
@@ -138,7 +142,7 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
                        p_save_dir_10m, '10T')
 
             print(f'{target_date_start} was saved')
-        if day_count == 2:
+        if day_count == 3:
             process_time = datetime.timedelta(
                 seconds=time.time() - loop_start_time)
             wait_time = datetime.timedelta(
@@ -315,10 +319,11 @@ def obtain_latest_summary(product_code, daily=False):
     before_10m_datetime = current_datetime - datetime.timedelta(minutes=10)
     before_1h_datetime = current_datetime - datetime.timedelta(hours=1)
     before_1d_datetime = current_datetime - datetime.timedelta(days=1)
+    before_2d_datetime = current_datetime - datetime.timedelta(days=2)
     before_32d_datetime = current_datetime - datetime.timedelta(days=32)
 
     df = get_executions_history(
-        start_date=before_1d_datetime, end_date=current_datetime, product_code='ETH_JPY', return_df=True)
+        start_date=before_2d_datetime, end_date=current_datetime, product_code='ETH_JPY', return_df=True)
 
     df_buy = df.query('side == "BUY"')
     df_sell = df.query('side == "SELL"')

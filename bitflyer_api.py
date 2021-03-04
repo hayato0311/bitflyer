@@ -7,9 +7,18 @@ import datetime
 import json
 from pprint import pprint
 from pathlib import Path
+import os
 
 import numpy as np
 import pandas as pd
+
+from manage import LOCAL
+
+
+if LOCAL:
+    from dotenv import load_dotenv
+    load_dotenv()
+
 
 # HTTP Public API (GET)
 HTTP_PUBLIC_API = {
@@ -66,10 +75,8 @@ class BitflyerAPI:
         self.method = method
         self.unix_time = str(time.time())
 
-        with open(API_KEY_PATH) as f:
-            id = json.load(f)
-        self.api_key = id['api_key']
-        self.api_secret = id['api_secret']
+        self.api_key = os.environ.get('API_KEY')
+        self.api_secret = os.environ.get('API_SECRET')
 
     def sign(self, body={}):
         if self.method == 'GET':
