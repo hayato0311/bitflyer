@@ -4,10 +4,13 @@ import time
 import pandas as pd
 from pathlib import Path
 from pprint import pprint
+from logging import getLogger
 
 from bitflyer_api import *
 from ai import *
 from manage import LOCAL
+
+logger = getLogger(__name__)
 
 if not LOCAL:
     import boto3
@@ -18,9 +21,8 @@ EXECUTION_HISTORY_DIR = 'execute_history'
 
 
 def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_code='ETH_JPY', count=500, return_df=False):
-    print('downloading executions history...')
-    print(f'start_date: {start_date}')
-    print(f'  end_date: {end_date}')
+    logger.info(
+        f'[{start_date} - {end_date}] 取引履歴をダウンロード中...')
 
     p_save_base_dir = Path(EXECUTION_HISTORY_DIR)
 
@@ -47,7 +49,7 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
         day_count += 1
         target_date_start = end_date_tmp
         target_date_end = end_date_tmp + datetime.timedelta(days=1)
-        print(target_date_start)
+        logger.debug(target_date_start)
 
         p_save_dir = p_save_base_dir.joinpath(
             product_code,
@@ -141,13 +143,13 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             resampling(df_buy_resample, df_sell_resample,
                        p_save_dir_10m, '10T')
 
-            print(f'{target_date_start} was saved')
+            logger.info(f'{target_date_start} のデータ更新が完了しました。')
         if day_count == 3:
             process_time = datetime.timedelta(
                 seconds=time.time() - loop_start_time)
             wait_time = datetime.timedelta(
                 minutes=5) - process_time
-            print('waiting...')
+            logger.debug('waiting...')
             if wait_time.total_seconds() > 0:
                 time.sleep(wait_time.total_seconds())
             day_count = 0
@@ -155,7 +157,7 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
 
         end_date_tmp -= datetime.timedelta(days=1)
 
-    print('downloading executions history was finished!!!')
+    logger.info(f'[{start_date} - {end_date}] 取引履歴のダウンロード終了')
 
     if return_df:
         return df_history

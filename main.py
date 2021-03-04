@@ -1,9 +1,33 @@
 import datetime
 import pandas as pd
+from logging import basicConfig, StreamHandler, FileHandler, getLogger, Formatter, DEBUG
 
 from bitflyer_api import *
 from ai import *
 from preprocess import *
+from manage import LOCAL
+
+
+sh = StreamHandler()
+
+
+format = '{asctime} {levelname:5} {filename} {funcName} {lineno}: {message}'
+
+if LOCAL:
+    fh = FileHandler('./logs/bitflyer_ai.log')
+
+    basicConfig(
+        handlers=[sh, fh],
+        level=DEBUG,
+        # filename='./logs/bitflyer_ai.log',
+        format=format, style='{'
+    )
+else:
+    basicConfig(
+        level=DEBUG
+    )
+
+logger = getLogger(__name__)
 
 
 def main():

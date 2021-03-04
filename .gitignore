@@ -4,6 +4,7 @@ private/
 child_orders/
 execute_history/
 balance_log/
+logs/
 
 # files
 .env

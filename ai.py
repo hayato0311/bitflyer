@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 from logging import getLogger
 from manage import LOCAL
+
 logger = getLogger(__name__)
 
 
@@ -79,12 +80,6 @@ class AI:
         self.datetime_references['monthly'] = \
             self.datetime_references['now'] - datetime.timedelta(days=31)
 
-        # self.size = {
-        #     'small': small_size,
-        #     'middle': middle_size,
-        #     'large': large_size
-        # }
-
         self.min_size = {
             'long': 0.1,
             'short': 0.01,
@@ -102,7 +97,7 @@ class AI:
 
     def load_latest_child_orders(self, term, child_order_cycle, child_order_acceptance_id,
                                  related_child_order_acceptance_id='no_id'):
-        print(f'child_order_acceptance_id: {child_order_acceptance_id}')
+        logger.debug(f'child_order_acceptance_id: {child_order_acceptance_id}')
         # get a child order from api
         child_orders_tmp = pd.DataFrame()
         start_time = time.time()
@@ -110,7 +105,8 @@ class AI:
             child_orders_tmp = get_child_orders(
                 region='Asia/Tokyo', child_order_acceptance_id=child_order_acceptance_id)
             if time.time() - start_time > 3:
-                print(f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
+                logger.info(
+                    f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
                 if child_order_acceptance_id in self.child_orders[term].index.tolist():
                     self.child_orders[term].drop(
                         index=[child_order_acceptance_id],
@@ -127,7 +123,11 @@ class AI:
 
         # csvファイルを更新
         self.child_orders[term].to_csv(str(self.p_child_orders_path[term]))
-        print(f'{str(self.p_child_orders_path[term])} file was updated')
+        logger.info(f'{str(self.p_child_orders_path[term])} が更新されました。')
+        if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED':
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {child_orders[term]["child_order_type"]} {child_order_acceptance_id}] 約定しました!'
+            )
 
     def update_child_orders(self, term,
                             child_order_acceptance_id="",
@@ -138,14 +138,15 @@ class AI:
         # 既存の注文における約定状態を更新
         # --------------------------------
         for child_order_acceptance_id_tmp in self.child_orders[term].index.tolist():
-            self.load_latest_child_orders(
-                term=term,
-                child_order_cycle=self.child_orders[term].at[child_order_acceptance_id_tmp,
-                                                             'child_order_cycle'],
-                child_order_acceptance_id=child_order_acceptance_id_tmp,
-                related_child_order_acceptance_id=self.child_orders[term].at[child_order_acceptance_id_tmp,
-                                                                             'related_child_order_acceptance_id']
-            )
+            if self.child_orders[term].at[child_order_acceptance_id_tmp, 'child_order_state'] == 'ACTIVE':
+                self.load_latest_child_orders(
+                    term=term,
+                    child_order_cycle=self.child_orders[term].at[child_order_acceptance_id_tmp,
+                                                                 'child_order_cycle'],
+                    child_order_acceptance_id=child_order_acceptance_id_tmp,
+                    related_child_order_acceptance_id=self.child_orders[term].at[child_order_acceptance_id_tmp,
+                                                                                 'related_child_order_acceptance_id']
+                )
         # --------------------------------
         # related_child_order_acceptance_idを指定して、注文情報を更新
         # --------------------------------
@@ -159,7 +160,7 @@ class AI:
                 related_child_order_acceptance_id=related_child_order_acceptance_id
             )
 
-    def cancel(self, term, child_order_cycle, child_order_acceptance_id):
+    def cancel(self, term, child_order_cycle, child_order_acceptance_id, child_order_type='buy'):
         # ----------------------------------------------------------------
         # キャンセル処理
         # ----------------------------------------------------------------
@@ -167,10 +168,8 @@ class AI:
                                       child_order_acceptance_id=child_order_acceptance_id)
         if response.status_code == 200:
             print('================================================================')
-            print(
-                f'{term}_term {child_order_cycle} order was successfully canceled!!!')
-            print(
-                f'child_order_acceptance_id: {child_order_acceptance_id}')
+            logger.info(
+                f'[{term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。')
             print('================================================================')
             self.child_orders[term].drop(
                 index=[child_order_acceptance_id],
@@ -183,7 +182,7 @@ class AI:
     def buy(self, term, child_order_cycle, reference_price, rate):
         price = int(reference_price * rate)
         if price >= self.latest_summary['BUY']['all']['price']['max'] * self.max_buy_prices_rate[term]:
-            print(f'[{term}, {child_order_cycle}] 過去最高価格に近いため、購入できません。')
+            logger.info(f'[{term} {child_order_cycle}] 過去最高価格に近いため、購入できません。')
             return
 
         size = self.min_size[term] * (1 / (1 - self.max_buy_prices_rate[term]) * (
@@ -208,7 +207,8 @@ class AI:
                 self.cancel(
                     term=term,
                     child_order_cycle=child_order_cycle,
-                    child_order_acceptance_id=same_category_order.index[0]
+                    child_order_acceptance_id=same_category_order.index[0],
+                    child_order_type='buy'
                 )
             # ----------------------------------------------------------------
             # 買い注文
@@ -217,15 +217,11 @@ class AI:
             response = send_child_order(self.product_code, 'LIMIT', 'BUY',
                                         price=price, size=size)
             if response.status_code == 200:
-                print('================================================================')
-                print('買い注文に成功しました!!')
-                print(f'product_code     : {self.product_code}')
-                print(f'price            : {price}')
-                print(f'size             : {size}')
-                print(f'term             : {term}')
-                print(f'child_order_cycle: {child_order_cycle}')
-                print('================================================================')
                 response_json = response.json()
+                print('================================================================')
+                logger.info(
+                    f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!')
+                print('================================================================')
                 self.update_child_orders(
                     term=term,
                     child_order_acceptance_id=response_json['child_order_acceptance_id'],
@@ -239,9 +235,11 @@ class AI:
         related_buy_order = self.child_orders[term].query(
             'side=="BUY" and child_order_state == "COMPLETED" and child_order_cycle == @child_order_cycle and related_child_order_acceptance_id == "no_id"').copy()
         if related_buy_order.empty:
-            print(f'[{term}, {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。')
+            logger.info(
+                f'[{term}, {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。')
         else:
             if len(related_buy_order) >= 2:
+                logger.error('同じフラグを持つ約定済みの買い注文が2つあります。')
                 raise ValueError(
                     '同じフラグを持つ約定済みの買い注文が2つあります。')
 
@@ -250,17 +248,12 @@ class AI:
             response = send_child_order(self.product_code, 'LIMIT', 'SELL',
                                         price=price, size=size)
             if response.status_code == 200:
-                #  TODO:利益を保存するファイルを生成
-                print('================================================================')
-                print(f'売り注文に成功しました！！')
-                print(
-                    f'profit: {int(int(related_buy_order["price"]) * (rate-1)) * size}円')
-                print(f'product_code: {self.product_code}')
-                print(f'price       : {price}')
-                print(f'size        : {size}')
-                print(f'term        : {term}')
-                print('================================================================')
                 response_json = response.json()
+                print('================================================================')
+                logger.info(
+                    f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} {int(int(related_buy_order["price"]) * (rate-1)) * size}] 売り注文に成功しました！！')
+                print('================================================================')
+
                 self.update_child_orders(
                     term=term,
                     child_order_cycle=child_order_cycle,
@@ -398,7 +391,7 @@ class AI:
         # =================================================================
 
         if self.child_orders['short'].empty:
-            print(f'[short] 買い注文がないため、売り注文はできません。')
+            logger.info(f'[short] 買い注文がないため、売り注文はできません。')
             return
 
         # =================================================================

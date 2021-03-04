@@ -8,12 +8,14 @@ import json
 from pprint import pprint
 from pathlib import Path
 import os
+from logging import getLogger
 
 import numpy as np
 import pandas as pd
 
 from manage import LOCAL
 
+logger = getLogger(__name__)
 
 if LOCAL:
     from dotenv import load_dotenv
@@ -105,10 +107,10 @@ class BitflyerAPI:
             self.api_url, headers=headers, params=self.params)
 
         if result.status_code == 200:
-            print(f'{name} was successful!')
+            logger.info(f'[{name}] GETに成功しました！')
         else:
-            print(f'{name} was Failed')
-            pprint(result.json())
+            logger.error(
+                f'[{name} {result.json()["error_message"]}] GETに失敗しました。')
         return result
 
     def post(self, body, name=''):
@@ -120,10 +122,10 @@ class BitflyerAPI:
         }
         result = requests.post(self.api_url, headers=headers, json=body)
         if result.status_code == 200:
-            print(f'{name} was successful!')
+            logger.info(f'[{name}] POSTに成功しました！')
         else:
-            print(f'{name} was Failed')
-            pprint(result.json())
+            logger.error(
+                f'[{name} {result.json()["error_message"]}] POSTに失敗しました。')
         return result
 
 
