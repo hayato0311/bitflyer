@@ -2,13 +2,14 @@ from bitflyer_api import *
 import pandas as pd
 from pathlib import Path
 from logging import getLogger
-from manage import LOCAL, BUCKET_NAME
+from manage import REF_LOCAL, BUCKET_NAME
 
 logger = getLogger(__name__)
 
 
-if not LOCAL:
+if not REF_LOCAL:
     from aws import S3
+    s3 = S3()
 
 
 CHILD_ORDERS_DIR = 'child_orders'
@@ -19,11 +20,9 @@ class AI:
 
     """
 
-    def __init__(self, latest_summary, product_code='ETH_JPY', prices={}, small_size=0.01, middle_size=0.1, large_size=0.3, time_diff=9, region='Asia/Tokyo',
+    def __init__(self, latest_summary, product_code='ETH_JPY',
+                 min_size_short=0.01, min_size_long=0.1,  time_diff=9, region='Asia/Tokyo',
                  bucket_name=''):
-
-        if not LOCAL:
-            self.s3 = S3(BUCKET_NAME)
 
         self.product_code = product_code
 
@@ -43,15 +42,23 @@ class AI:
         self.latest_summary = latest_summary
 
         for term in ['long', 'short']:
-            if self.p_child_orders_path[term].exists():
-                if LOCAL:
-                    self.child_orders[term] = pd.read_csv(
-                        str(self.p_child_orders_path[term])
-                    )
-                else:
-                    self.child_orders[term] = self.s3.read_csv(
-                        str(self.p_child_orders_path[term])
-                    )
+            if REF_LOCAL and self.p_child_orders_path[term].exists():
+                self.child_orders[term] = pd.read_csv(
+                    str(self.p_child_orders_path[term])
+                )
+                self.child_orders[term] = self.child_orders[term].set_index(
+                    'child_order_acceptance_id',
+                    drop=True
+                )
+
+                self.child_orders[term]['child_order_date'] = pd.to_datetime(
+                    self.child_orders[term]['child_order_date'])
+                self.child_orders[term]['child_order_date'] = self.child_orders[term]['child_order_date'].dt.tz_convert(
+                    region)
+            elif not REF_LOCAL and s3.key_exists(str(self.p_child_orders_path[term])):
+                self.child_orders[term] = s3.read_csv(
+                    str(self.p_child_orders_path[term])
+                )
 
                 self.child_orders[term] = self.child_orders[term].set_index(
                     'child_order_acceptance_id',
@@ -80,19 +87,29 @@ class AI:
             self.datetime_references['now'] - datetime.timedelta(days=31)
 
         self.min_size = {
-            'long': 0.1,
-            'short': 0.01,
+            'long': min_size_long,
+            'short': min_size_short,
         }
-
-        if self.latest_summary['BUY']['1w']['price']['max'] < self.latest_summary['BUY']['all']['price']['max'] * 0.25:
-            self.small_size = middle_size
-            self.middle_size = large_size
-            self.large_size = large_size
 
         self.max_buy_prices_rate = {
-            'long': 0.7,
-            'short': 0.75
+            'long': 0.75,
+            'short': 0.80
         }
+
+    def delte_order(self, term, child_order_acceptance_id):
+        self.child_orders[term].drop(
+            index=[child_order_acceptance_id],
+            inplace=True
+        )
+        # csvファイルを更新
+        if REF_LOCAL:
+            self.child_orders[term].to_csv(
+                str(self.p_child_orders_path[term]))
+        else:
+            s3.to_csv(
+                str(self.p_child_orders_path[term]),
+                df=self.child_orders[term]
+            )
 
     def load_latest_child_orders(self, term, child_order_cycle, child_order_acceptance_id,
                                  related_child_order_acceptance_id='no_id'):
@@ -103,37 +120,50 @@ class AI:
         while child_orders_tmp.empty:
             child_orders_tmp = get_child_orders(
                 region='Asia/Tokyo', child_order_acceptance_id=child_order_acceptance_id)
-            if time.time() - start_time > 3:
+            if time.time() - start_time > 5:
                 logger.info(
                     f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
-                if child_order_acceptance_id in self.child_orders[term].index.tolist():
-                    self.child_orders[term].drop(
-                        index=[child_order_acceptance_id],
-                        inplace=True
-                    )
+                self.delte_order(
+                    term=term,
+                    child_order_acceptance_id=child_order_acceptance_id
+                )
                 break
         if not child_orders_tmp.empty:
             child_orders_tmp['child_order_cycle'] = child_order_cycle
             child_orders_tmp['related_child_order_acceptance_id'] = related_child_order_acceptance_id
+            child_orders_tmp['profit'] = 0
+
             if self.child_orders[term].empty:
                 self.child_orders[term] = child_orders_tmp
             else:
                 self.child_orders[term].loc[child_order_acceptance_id] = child_orders_tmp.loc[child_order_acceptance_id]
 
+            if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED':
+                logger.info(
+                    f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "child_order_type"]} {child_order_acceptance_id}] 約定しました!'
+                )
+
+                if self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
+                    profit = self.child_orders[term].at[child_order_acceptance_id, 'price'] * \
+                        self.child_orders[term].at[child_order_acceptance_id, 'size'] - \
+                        self.child_orders[term].at[related_child_order_acceptance_id, 'price'] * \
+                        self.child_orders[term].at[related_child_order_acceptance_id, 'size']
+                    logger.info(
+                        f'{profit}円の利益が発生しました。'
+                    )
+                    self.child_orders[term].at[child_order_acceptance_id,
+                                               'profit'] = profit
+
         # csvファイルを更新
-        if LOCAL:
+        if REF_LOCAL:
             self.child_orders[term].to_csv(str(self.p_child_orders_path[term]))
         else:
-            self.s3.to_csv(
+            s3.to_csv(
                 str(self.p_child_orders_path[term]),
                 df=self.child_orders[term]
             )
 
         logger.info(f'{str(self.p_child_orders_path[term])} が更新されました。')
-        if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED':
-            logger.info(
-                f'[{self.product_code} {term} {child_order_cycle} {child_orders[term]["child_order_type"]} {child_order_acceptance_id}] 約定しました!'
-            )
 
     def update_child_orders(self, term,
                             child_order_acceptance_id="",
@@ -173,26 +203,38 @@ class AI:
         response = cancel_child_order(product_code=self.product_code,
                                       child_order_acceptance_id=child_order_acceptance_id)
         if response.status_code == 200:
+            self.delte_order(term, child_order_acceptance_id)
             print('================================================================')
             logger.info(
                 f'[{term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。')
             print('================================================================')
-            self.child_orders[term].drop(
-                index=[child_order_acceptance_id],
-                inplace=True
-            )
-            self.update_child_orders(term=term)
         else:
+            response_json = response.json()
+            logger.error(response_json['error_message'])
             raise Exception("Cancel of buying order was failed")
 
-    def buy(self, term, child_order_cycle, reference_price, rate):
-        price = int(reference_price * rate)
-        if price >= self.latest_summary['BUY']['all']['price']['max'] * self.max_buy_prices_rate[term]:
-            logger.info(f'[{term} {child_order_cycle}] 過去最高価格に近いため、購入できません。')
+    def buy(self, term, child_order_cycle, local_prices):
+        global_prices = self.latest_summary['BUY']['all']['price']
+        if 1 - local_prices['min'] / global_prices['max'] > 1 / 2:
+            price_rate = 1
+        else:
+            price_rate = -4 * (1 - self.max_buy_prices_rate[term]) * (
+                1 - local_prices['min'] / global_prices['max']) ** 2 + 1
+            # price_rate = 2 * (1 - self.max_buy_prices_rate[term]) * (
+            #     1 - local_prices['min'] / global_prices['max']) + self.max_buy_prices_rate[term]
+            # price_rate = 4 * (1 - self.max_buy_prices_rate[term]) * (
+            #     1 - local_prices['min'] / global_prices['max']) ** 2 + self.max_buy_prices_rate[term]
+
+        price = int(local_prices['min'] * price_rate)
+        if price >= global_prices['max'] * self.max_buy_prices_rate[term]:
+            logger.info(
+                f'[{term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。')
             return
 
-        size = self.min_size[term] * (1 / (1 - self.max_buy_prices_rate[term]) * (
-            1 - (price / self.latest_summary['BUY']['all']['price']['max']))) ** 2
+        size_rate = 32 * (self.max_buy_prices_rate[term] -
+                          price / global_prices['max']) ** 2 + 1
+
+        size = self.min_size[term] * size_rate
 
         size = round(size, 3)
 
@@ -201,20 +243,35 @@ class AI:
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
             target_buy_history = self.child_orders[term].query(
-                'child_order_date > @target_datetime')
+                'child_order_date > @target_datetime  and child_order_cycle == @child_order_cycle')
             same_category_order = self.child_orders[term].query(
                 'child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle').copy()
+
+        if not target_buy_history.empty and not target_buy_history.empty:
+            logger.info(
+                f'[{term} {child_order_cycle}] すでに注文済みのため、購入できません。'
+            )
+            return
 
         if target_buy_history.empty or same_category_order.empty:
             # ----------------------------------------------------------------
             # 同じカテゴリーの注文がすでに存在していた場合、前の注文をキャンセルする。
             # ----------------------------------------------------------------
             if not same_category_order.empty:
+                if len(same_category_order) >= 2:
+                    logger.error('同じサイクルを持つACTIVEな買い注文が2つ以上あります。')
+                logger.info(
+                    f'[{term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、前回の注文をキャンセルし、新規の買い注文を行います。'
+                )
                 self.cancel(
                     term=term,
                     child_order_cycle=child_order_cycle,
                     child_order_acceptance_id=same_category_order.index[0],
                     child_order_type='buy'
+                )
+            else:
+                logger.info(
+                    f'[{term} {child_order_cycle}] 同じサイクルを持つACTIVEな買い注文が存在しないため、買い注文を行います。'
                 )
             # ----------------------------------------------------------------
             # 買い注文
@@ -234,6 +291,8 @@ class AI:
                     child_order_cycle=child_order_cycle
                 )
             else:
+                response_json = response.json()
+                logger.error(response_json['error_message'])
                 raise Exception(
                     f"{term}_term {child_order_cycle} buying order was failed")
 
@@ -246,8 +305,6 @@ class AI:
         else:
             if len(related_buy_order) >= 2:
                 logger.error('同じフラグを持つ約定済みの買い注文が2つあります。')
-                raise ValueError(
-                    '同じフラグを持つ約定済みの買い注文が2つあります。')
 
             price = int(int(related_buy_order['price']) * rate)
             size = round(float(related_buy_order['size']), 3)
@@ -273,6 +330,8 @@ class AI:
                     child_order_acceptance_id=related_buy_order.index[0]
                 )
             else:
+                response_json = response.json()
+                logger.error(response_json['error_message'])
                 raise Exception(
                     f"{term}_term {child_order_cycle} selling order was failed")
 
@@ -298,8 +357,7 @@ class AI:
         self.buy(
             term='long',
             child_order_cycle='daily',
-            reference_price=self.latest_summary['BUY']['1d']['price']['min'],
-            rate=0.80
+            local_prices=self.latest_summary['BUY']['1d']['price']
         )
 
         # =================================================================
@@ -311,8 +369,7 @@ class AI:
         self.buy(
             term='long',
             child_order_cycle='weekly',
-            reference_price=self.latest_summary['BUY']['1w']['price']['min'],
-            rate=0.70
+            local_prices=self.latest_summary['BUY']['1w']['price']
         )
 
         # =================================================================
@@ -324,8 +381,7 @@ class AI:
         self.buy(
             term='long',
             child_order_cycle='monthly',
-            reference_price=self.latest_summary['BUY']['1m']['price']['min'],
-            rate=0.75
+            local_prices=self.latest_summary['BUY']['1m']['price']
         )
 
     def short_term(self):
@@ -356,40 +412,31 @@ class AI:
         # =================================================================
         # 条件1:
         #   - 周期:hourly
-        #   - 指値注文価格: 1時間の最安値の95%
-        #   - サイズ: small
         # =================================================================
         self.buy(
             term='short',
             child_order_cycle='hourly',
-            reference_price=self.latest_summary['BUY']['1h']['price']['min'],
-            rate=0.95
+            local_prices=self.latest_summary['BUY']['1h']['price']
         )
 
         # =================================================================
         # 条件2:
         #   - 周期:daily
-        #   - 指値注文価格: １日の最安値の95%
-        #   - サイズ: small
         # =================================================================
         self.buy(
             term='short',
             child_order_cycle='daily',
-            reference_price=self.latest_summary['BUY']['1d']['price']['min'],
-            rate=0.95
+            local_prices=self.latest_summary['BUY']['1d']['price']
         )
 
         # =================================================================
         # 条件3:
         #   - 周期:weekly
-        #   - 指値注文価格: １週間の最安値の85%
-        #   - サイズ: small
         # =================================================================
         self.buy(
             term='short',
             child_order_cycle='weekly',
-            reference_price=self.latest_summary['BUY']['1w']['price']['min'],
-            rate=0.85
+            local_prices=self.latest_summary['BUY']['1w']['price']
         )
 
         # =================================================================
@@ -403,20 +450,18 @@ class AI:
         # =================================================================
         # 条件1:
         #   - 周期:hourly
-        #   - 指値注文価格: 購入価格の110%
-        #   - サイズ: small
+        #   - 指値注文価格: 購入価格の180%
         # =================================================================
         self.sell(
             term='short',
             child_order_cycle='hourly',
-            rate=1.10
+            rate=1.80
         )
 
         # =================================================================
         # 条件2:
         #   - 周期:daily
         #   - 指値注文価格: 購入価格の190%
-        #   - サイズ: small
         # =================================================================
         self.sell(
             term='short',
@@ -428,7 +473,6 @@ class AI:
         # 条件3:
         #   - 周期:weekly
         #   - 指値注文価格: 購入価格の200%
-        #   - サイズ: small
         # =================================================================
 
         self.sell(

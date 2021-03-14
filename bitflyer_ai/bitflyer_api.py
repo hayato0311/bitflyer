@@ -1,26 +1,28 @@
-import hashlib
-import hmac
-import requests
-import time
-import pytz
-import datetime
-import json
-from pprint import pprint
-from pathlib import Path
-import os
-from logging import getLogger
-
-import numpy as np
+from manage import LOCAL, REF_LOCAL
 import pandas as pd
+from logging import getLogger
+import os
+from pathlib import Path
+from pprint import pprint
+import json
+import datetime
+import pytz
+import time
+import requests
+import hmac
+import hashlib
 
-from manage import LOCAL
 
 logger = getLogger(__name__)
 
 if LOCAL:
     from dotenv import load_dotenv
     load_dotenv()
+else:
+    import aws
 
+# else:
+#     from aws import decrypt
 
 # HTTP Public API (GET)
 HTTP_PUBLIC_API = {
@@ -79,6 +81,17 @@ class BitflyerAPI:
 
         self.api_key = os.environ.get('API_KEY')
         self.api_secret = os.environ.get('API_SECRET')
+
+        if not LOCAL:
+            self.api_key = aws.decrypt(self.api_key)
+            self.api_secret = aws.decrypt(self.api_secret)
+
+        # if REF_LOCAL:
+        #     self.api_key = os.environ.get('API_KEY')
+        #     self.api_secret = os.environ.get('API_SECRET')
+        # else:
+        #     self.api_key = decrypt(os.environ.get('API_KEY'))
+        #     self.api_secret = decrypt(os.environ.get('API_SECRET'))
 
     def sign(self, body={}):
         if self.method == 'GET':
@@ -183,7 +196,9 @@ def get_executions(product_code='ETH_JPY', count=100, before=0, after=0, region=
 
         return df_result
     else:
-        raise Exception('error')
+        response_json = response.json()
+        logger.error(response_json['error_message'])
+        raise Exception('get execution error')
 
 
 # HTTP_PRIVATE_API
@@ -237,6 +252,10 @@ def get_child_orders(product_code='ETH_JPY', count=100, before=0, after=0,
                 region)
             df = df.sort_values('child_order_date').reset_index(drop=True)
             df = df.set_index('child_order_acceptance_id')
+    else:
+        response_json = response.json()
+        logger.error(response_json['error_message'])
+        raise Exception(f"get_child_order was failed")
 
     return df
 

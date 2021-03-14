@@ -8,13 +8,14 @@ from logging import getLogger
 
 from bitflyer_api import *
 from ai import *
-from manage import LOCAL, BUCKET_NAME
+from manage import REF_LOCAL, BUCKET_NAME
 
 
 logger = getLogger(__name__)
 
-if not LOCAL:
+if not REF_LOCAL:
     from aws import S3
+    s3 = S3()
 
 BALANCE_LOG_DIR = 'balance_log'
 EXECUTION_HISTORY_DIR = 'execute_history'
@@ -64,41 +65,57 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
         p_save_path_row_buy = p_save_dir_row.joinpath('buy.csv')
         p_save_path_row_sell = p_save_dir_row.joinpath('sell.csv')
 
-        if not p_save_dir_row.exists():
-            p_save_dir_row.mkdir(parents=True)
-        if not p_save_dir_1h.exists():
-            p_save_dir_1h.mkdir(parents=True)
-        if not p_save_dir_1m.exists():
-            p_save_dir_1m.mkdir(parents=True)
-        if not p_save_dir_10m.exists():
-            p_save_dir_10m.mkdir(parents=True)
+        if REF_LOCAL:
+            if not p_save_dir_row.exists():
+                p_save_dir_row.mkdir(parents=True)
+            if not p_save_dir_1h.exists():
+                p_save_dir_1h.mkdir(parents=True)
+            if not p_save_dir_1m.exists():
+                p_save_dir_1m.mkdir(parents=True)
+            if not p_save_dir_10m.exists():
+                p_save_dir_10m.mkdir(parents=True)
 
         before = 0
         after = 0
-
-        if p_save_path_row_all.exists():
-            if LOCAL:
+        if REF_LOCAL:
+            if p_save_path_row_all.exists():
                 df = pd.read_csv(str(p_save_path_row_all))
+
+                df['exec_date'] = pd.to_datetime(df['exec_date'])
+                df = df.set_index('exec_date')
+                df = df.tz_convert(region)
+
+                before = int(df.head(1)['id'])
+                after = int(df.tail(1)['id'])
+
             else:
-                s3 = S3(BUCKET_NAME)
-                df = s3.read_csv(str(p_save_path_row_all))
-
-            df['exec_date'] = pd.to_datetime(df['exec_date'])
-            df = df.set_index('exec_date')
-            df = df.tz_convert(region)
-
-            before = int(df.head(1)['id'])
-            after = int(df.tail(1)['id'])
-
-        else:
-            df = get_executions(product_code, count,
-                                before=before, region=region)
-            if df.empty:
                 df = get_executions(product_code, count,
-                                    after=after, region=region)
-            df = df.sort_index()
-            before = int(df.head(1)['id'])
-            after = int(df.tail(1)['id'])
+                                    before=before, region=region)
+                if df.empty:
+                    df = get_executions(product_code, count,
+                                        after=after, region=region)
+                df = df.sort_index()
+                before = int(df.head(1)['id'])
+                after = int(df.tail(1)['id'])
+        else:
+
+            if s3.key_exists(str(p_save_path_row_all)):
+                df = s3.read_csv(str(p_save_path_row_all))
+                df['exec_date'] = pd.to_datetime(df['exec_date'])
+                df = df.set_index('exec_date')
+                df = df.tz_convert(region)
+
+                before = int(df.head(1)['id'])
+                after = int(df.tail(1)['id'])
+            else:
+                df = get_executions(product_code, count,
+                                    before=before, region=region)
+                if df.empty:
+                    df = get_executions(product_code, count,
+                                        after=after, region=region)
+                df = df.sort_index()
+                before = int(df.head(1)['id'])
+                after = int(df.tail(1)['id'])
 
         while target_date_start < df.head(1).index[0]:
             df_new = get_executions(product_code, count, before=before)
@@ -108,7 +125,7 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             df = pd.concat([df, df_new])
             df = df.sort_index()
             before = int(df.head(1)['id'])
-            if LOCAL:
+            if REF_LOCAL:
                 time.sleep(0.25)
 
         while df.tail(1).index[0] < target_date_end:
@@ -119,7 +136,7 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             df = pd.concat([df, df_new])
             df = df.sort_index()
             after = int(df.tail(1)['id'])
-            if LOCAL:
+            if REF_LOCAL:
                 time.sleep(0.25)
 
         df = df.query('@target_date_start <= index < @target_date_end')
@@ -134,12 +151,11 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
             df_buy = df.query('side == "BUY"')
             df_sell = df.query('side == "SELL"')
 
-            if LOCAL:
+            if REF_LOCAL:
                 df.to_csv(str(p_save_path_row_all))
                 df_buy.to_csv(str(p_save_path_row_buy))
                 df_sell.to_csv(str(p_save_path_row_sell))
             else:
-                s3 = S3(BUCKET_NAME)
                 s3.to_csv(
                     str(p_save_path_row_all),
                     df=df
@@ -168,7 +184,7 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
                        p_save_dir_10m, '10T')
 
             logger.info(f'{target_date_start} のデータ更新が完了しました。')
-        if day_count == 3:
+        if day_count == 5:
             process_time = datetime.timedelta(
                 seconds=time.time() - loop_start_time)
             wait_time = datetime.timedelta(
@@ -188,16 +204,16 @@ def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_co
 
 
 def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
+    logger.info(f'[{p_save_dir} {freq}] リサンプリング中...')
     df_buy_price = df_buy[['price']]
     df_buy_size = df_buy[['size']]
     df_buy_price = df_buy_price.resample(freq).mean()
     df_buy_size = df_buy_size.resample(freq).sum()
     df_buy_resampled = pd.concat([df_buy_price, df_buy_size], axis=1)
     if not p_save_dir == '':
-        if LOCAL:
+        if REF_LOCAL:
             df_buy_resampled.to_csv(str(p_save_dir.joinpath('buy.csv')))
         else:
-            s3 = S3(BUCKET_NAME)
             s3.to_csv(
                 str(p_save_dir.joinpath('buy.csv')),
                 df=df_buy_resampled
@@ -209,28 +225,27 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
     df_sell_size = df_sell_size.resample(freq).sum()
     df_sell_resampled = pd.concat([df_sell_price, df_sell_size], axis=1)
     if not p_save_dir == '':
-        if LOCAL:
+        if REF_LOCAL:
             df_sell_resampled.to_csv(str(p_save_dir.joinpath('sell.csv')))
         else:
-            s3 = S3(BUCKET_NAME)
             s3.to_csv(
                 str(p_save_dir.joinpath('sell.csv')),
                 df=df_sell_resampled
             )
-
+    logger.info(f'[{p_save_dir} {freq}] リサンプリング完了')
     return df_buy_resampled, df_sell_resampled
 
 
 def make_summary_from_scratch(p_dir):
+    logger.info(f'[{p_dir}] 新しい集計データを作成中...')
     p_buy_path = p_dir.joinpath('buy.csv')
     p_sell_path = p_dir.joinpath('sell.csv')
     p_summary_path = p_dir.joinpath('..', 'summary.csv')
 
-    if LOCAL:
+    if REF_LOCAL:
         df_buy = pd.read_csv(str(p_buy_path))
         df_sell = pd.read_csv(str(p_sell_path))
     else:
-        s3 = S3(BUCKET_NAME)
         df_buy = s3.read_csv(str(p_buy_path))
         df_sell = s3.read_csv(str(p_sell_path))
     df_summary = pd.DataFrame(
@@ -263,33 +278,39 @@ def make_summary_from_scratch(p_dir):
         ]
     )
 
-    if LOCAL:
+    if REF_LOCAL:
         df_summary.to_csv(str(p_summary_path), index=False)
     else:
-        s3 = S3(BUCKET_NAME)
         s3.to_csv(
             str(p_summary_path),
             df=df_summary,
             index=False
         )
-
+    logger.info(f'[{p_dir}] 作成完了')
     return df_summary
 
 
-def make_summary_from_csv(p_dir='', p_summary_path_list=[], save=True):
+def make_summary_from_csv(p_dir='', summary_path_list=[], save=True):
+    logger.info(f'[{p_dir}] 集計データを更新中...')
     df_summary = pd.DataFrame()
-    if p_summary_path_list == [] and p_dir != '':
-        p_summary_path_list = p_dir.glob('*/summary.csv')
-
-    for p_summary_path in p_summary_path_list:
-        if not p_summary_path.exists():
-            continue
-
-        if LOCAL:
-            df_summary_child = pd.read_csv(str(p_summary_path))
+    if summary_path_list == [] and p_dir != '':
+        if REF_LOCAL:
+            p_summary_path_list = p_dir.glob('*/summary.csv')
+            summary_path_list = [
+                str(p_summary_path) for p_summary_path in p_summary_path_list
+            ]
         else:
-            aws = S3(BUCKET_NAME)
-            df_summary_child = aws.read_csv(str(p_summary_path))
+            day_dir_list = s3.listdir(str(p_dir))
+            for day_dir in day_dir_list:
+                summary_path_tmp = day_dir + 'summary.csv'
+                if s3.key_exists(summary_path_tmp):
+                    summary_path_list.append(summary_path_tmp)
+
+    for summary_path in summary_path_list:
+        if REF_LOCAL:
+            df_summary_child = pd.read_csv(summary_path)
+        else:
+            df_summary_child = s3.read_csv(summary_path)
 
         df_summary_child = df_summary_child.set_index('CATEGORY', drop=True)
 
@@ -319,15 +340,14 @@ def make_summary_from_csv(p_dir='', p_summary_path_list=[], save=True):
     if save and p_dir != '':
         p_summary_save_path = p_dir.joinpath('summary.csv')
 
-        if LOCAL:
+        if REF_LOCAL:
             df_summary.to_csv(str(p_summary_save_path))
         else:
-            s3 = S3(BUCKET_NAME)
             s3.to_csv(
                 str(p_summary_save_path),
                 df=df_summary,
             )
-
+    logger.info(f'[{p_dir}] 更新完了')
     return df_summary
 
 
@@ -376,7 +396,7 @@ def estimate_trends(latest_summary):
 
 
 def obtain_latest_summary(product_code, daily=False):
-
+    logger.info(f'[{product_code}] 最新の集計データを取得中...')
     p_exe_history_dir = Path(EXECUTION_HISTORY_DIR)
     p_all_summary_path = p_exe_history_dir.joinpath(
         product_code, 'summary.csv')
@@ -415,7 +435,7 @@ def obtain_latest_summary(product_code, daily=False):
     df_buy_1d = df_buy_resampled.query('index > @before_1d_datetime')
     df_sell_1d = df_sell_resampled.query('index > @before_1d_datetime')
 
-    gen_execution_summaries(year=current_datetime.strftime('%Y'), month=-1, day=-1,
+    gen_execution_summaries(year=current_datetime.strftime('%Y'), month=current_datetime.strftime('%m'), day=-1,
                             product_code='ETH_JPY')
 
     # monthly summary
@@ -431,36 +451,52 @@ def obtain_latest_summary(product_code, daily=False):
             before_32d_datetime.strftime('%Y'),
             before_32d_datetime.strftime('%m'),
             'summary.csv'
-        ),
+        )
     ]
+    target_monthly_summary_path_list = []
+    for p_target_monthly_summary_path in p_target_monthly_summary_path_list:
+        if REF_LOCAL:
+            if p_target_monthly_summary_path.exists():
+                target_monthly_summary_path_list.append(
+                    str(p_target_monthly_summary_path)
+                )
+        else:
+            if s3.key_exists(str(p_target_monthly_summary_path)):
+                target_monthly_summary_path_list.append(
+                    str(p_target_monthly_summary_path)
+                )
+
     df_monthly_summary = make_summary_from_csv(
-        p_summary_path_list=p_target_monthly_summary_path_list,
+        summary_path_list=target_monthly_summary_path_list,
         save=False
     )
     # weekly summary
-    p_target_weekly_summary_path_list = [
-        p_exe_history_dir.joinpath(
+    target_weekly_summary_path_list = []
+    for i in range(8):
+        if i == 0:
+            target_datetime = current_datetime
+        else:
+            target_datetime = current_datetime - datetime.timedelta(days=i)
+        p_target_weekly_summary_path = p_exe_history_dir.joinpath(
             product_code,
-            current_datetime.strftime('%Y'),
-            current_datetime.strftime('%m'),
-            current_datetime.strftime('%d'),
+            target_datetime.strftime('%Y'),
+            target_datetime.strftime('%m'),
+            target_datetime.strftime('%d'),
             'summary.csv'
         )
-    ]
-    for i in range(1, 8):
-        target_datetime = current_datetime - datetime.timedelta(days=i)
-        p_target_weekly_summary_path_list.append(
-            p_exe_history_dir.joinpath(
-                product_code,
-                target_datetime.strftime('%Y'),
-                target_datetime.strftime('%m'),
-                target_datetime.strftime('%d'),
-                'summary.csv'
-            )
-        )
+        if REF_LOCAL:
+            if p_target_weekly_summary_path.exists():
+                target_weekly_summary_path_list.append(
+                    str(p_target_weekly_summary_path)
+                )
+        else:
+            if s3.key_exists(str(p_target_weekly_summary_path)):
+                target_weekly_summary_path_list.append(
+                    str(p_target_weekly_summary_path)
+                )
 
     df_weekly_summary = make_summary_from_csv(
-        p_summary_path_list=p_target_weekly_summary_path_list,
+        summary_path_list=target_weekly_summary_path_list,
         save=False
     )
 
@@ -482,16 +518,27 @@ def obtain_latest_summary(product_code, daily=False):
             'summary.csv'
         )
     ]
+    target_yearly_summary_path_list = []
+    for p_target_yearly_summary_path in p_target_yearly_summary_path_list:
+        if REF_LOCAL:
+            if p_target_yearly_summary_path.exists():
+                target_yearly_summary_path_list.append(
+                    str(p_target_yearly_summary_path)
+                )
+        else:
+            if s3.key_exists(str(p_target_yearly_summary_path)):
+                target_yearly_summary_path_list.append(
+                    str(p_target_yearly_summary_path)
+                )
 
     df_yearly_summary = make_summary_from_csv(
-        p_summary_path_list=p_target_yearly_summary_path_list,
+        summary_path_list=target_yearly_summary_path_list,
         save=False
     )
 
-    if LOCAL:
+    if REF_LOCAL:
         df_all_summary = pd.read_csv(str(p_all_summary_path))
     else:
-        s3 = S3(BUCKET_NAME)
         df_all_summary = s3.read_csv(str(p_all_summary_path))
 
     df_all_summary = df_all_summary.set_index('CATEGORY', drop=True)
@@ -614,13 +661,14 @@ def obtain_latest_summary(product_code, daily=False):
             },
         }
     }
-    latest_summary = estimate_trends(latest_summary)
+    # latest_summary = estimate_trends(latest_summary)
+    logger.info(f'[{product_code}] 最新の集計データ取得完了')
 
     return latest_summary
 
 
 def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY'):
-
+    logger.info(f'[{product_code}] 取引の集計データを作成中...')
     p_save_base_dir = Path(EXECUTION_HISTORY_DIR)
     p_product_dir = p_save_base_dir.joinpath(product_code)
     p_year_dir = p_product_dir.joinpath(str(year))
@@ -655,3 +703,4 @@ def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY')
 
     make_summary(p_year_dir)
     make_summary(p_product_dir)
+    logger.info(f'[{product_code}] 取引の集計データ作成完了')

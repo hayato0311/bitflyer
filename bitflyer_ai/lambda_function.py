@@ -5,21 +5,17 @@ from logging import basicConfig, StreamHandler, FileHandler, getLogger, Formatte
 from bitflyer_api import *
 from ai import *
 from preprocess import *
-from manage import LOCAL
-
-
-sh = StreamHandler()
-
+from manage import REF_LOCAL
 
 format = '{asctime} {levelname:5} {filename} {funcName} {lineno}: {message}'
 
-if LOCAL:
+if REF_LOCAL:
+    sh = StreamHandler()
     fh = FileHandler('./logs/bitflyer_ai.log')
 
     basicConfig(
         handlers=[sh, fh],
         level=INFO,
-        # filename='./logs/bitflyer_ai.log',
         format=format, style='{'
     )
 else:
@@ -31,17 +27,17 @@ else:
 logger = getLogger(__name__)
 
 
-def main():
+def lambda_handler(event, context):
     current_datetime = datetime.datetime.now(
         datetime.timezone(datetime.timedelta(hours=9)))
 
     latest_summary = obtain_latest_summary(product_code='ETH_JPY', daily=False)
 
-    gen_execution_summaries(year=current_datetime.strftime('%Y'), month=-1, day=-1,
+    gen_execution_summaries(year=current_datetime.strftime('%Y'), month=current_datetime.strftime('%m'), day=-1,
                             product_code='ETH_JPY')
 
-    ai = AI(product_code='ETH_JPY', small_size=0.01,
-            middle_size=0.1, large_size=0.3, time_diff=9, latest_summary=latest_summary)
+    ai = AI(product_code='ETH_JPY', min_size_short=0.01,
+            min_size_long=0.1, time_diff=9, latest_summary=latest_summary)
     ai.long_term()
     ai.short_term()
 
@@ -69,4 +65,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    lambda_handler('', '')

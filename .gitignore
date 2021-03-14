@@ -5,6 +5,9 @@ child_orders/
 execute_history/
 balance_log/
 logs/
+lambda/
+python/
 
 # files
 .env
+*.zip
