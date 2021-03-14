@@ -19,6 +19,12 @@ if REF_LOCAL:
         format=format, style='{'
     )
 else:
+    # 既存のハンドラーを削除
+    root = getLogger()
+    if root.handlers:
+        for handler in root.handlers:
+            root.removeHandler(handler)
+
     basicConfig(
         level=INFO,
         format=format, style='{'
