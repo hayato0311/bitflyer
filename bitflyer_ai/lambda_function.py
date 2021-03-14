@@ -37,7 +37,7 @@ logger = getLogger(__name__)
 def lambda_handler(event, context):
     current_datetime = datetime.datetime.now(
         datetime.timezone(datetime.timedelta(hours=9)))
-
+    logger.info('取引情報更新中...')
     latest_summary = obtain_latest_summary(product_code='ETH_JPY', daily=False)
 
     gen_execution_summaries(
@@ -46,11 +46,16 @@ def lambda_handler(event, context):
         day=current_datetime.strftime('%d'),
         product_code='ETH_JPY'
     )
+    logger.info('取引情報更新完了')
+
+    logger.info('注文中...')
 
     ai = AI(product_code='ETH_JPY', min_size_short=0.01,
             min_size_long=0.1, time_diff=9, latest_summary=latest_summary)
     ai.long_term()
     ai.short_term()
+
+    logger.info('注文完了')
 
     # start_date = end_date - datetime.timedelta(days=1)
     # df = get_executions_history(

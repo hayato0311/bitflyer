@@ -120,7 +120,7 @@ class BitflyerAPI:
             self.api_url, headers=headers, params=self.params)
 
         if result.status_code == 200:
-            logger.info(f'[{name}] GETに成功しました！')
+            logger.debug(f'[{name}] GETに成功しました！')
         else:
             logger.error(
                 f'[{name} {result.json()["error_message"]}] GETに失敗しました。')
@@ -135,7 +135,7 @@ class BitflyerAPI:
         }
         result = requests.post(self.api_url, headers=headers, json=body)
         if result.status_code == 200:
-            logger.info(f'[{name}] POSTに成功しました！')
+            logger.debug(f'[{name}] POSTに成功しました！')
         else:
             logger.error(
                 f'[{name} {result.json()["error_message"]}] POSTに失敗しました。')

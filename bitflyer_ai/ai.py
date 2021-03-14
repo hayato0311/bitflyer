@@ -121,7 +121,7 @@ class AI:
             child_orders_tmp = get_child_orders(
                 region='Asia/Tokyo', child_order_acceptance_id=child_order_acceptance_id)
             if time.time() - start_time > 5:
-                logger.info(
+                logger.warning(
                     f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
                 self.delte_order(
                     term=term,
@@ -163,7 +163,7 @@ class AI:
                 df=self.child_orders[term]
             )
 
-        logger.info(f'{str(self.p_child_orders_path[term])} が更新されました。')
+        logger.debug(f'{str(self.p_child_orders_path[term])} が更新されました。')
 
     def update_child_orders(self, term,
                             child_order_acceptance_id="",
