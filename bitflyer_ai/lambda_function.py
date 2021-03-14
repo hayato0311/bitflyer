@@ -7,11 +7,11 @@ from ai import *
 from preprocess import *
 from manage import REF_LOCAL
 
-format = '{asctime} {levelname:5} {filename} {funcName} {lineno}: {message}'
 
-if REF_LOCAL:
+if LOCAL:
     sh = StreamHandler()
     fh = FileHandler('./logs/bitflyer_ai.log')
+    format = '{asctime} {levelname:5} {filename} {funcName} {lineno}: {message}'
 
     basicConfig(
         handlers=[sh, fh],
@@ -25,6 +25,7 @@ else:
         for handler in root.handlers:
             root.removeHandler(handler)
 
+    format = '{levelname:5} {filename} {funcName} {lineno}: {message}'
     basicConfig(
         level=INFO,
         format=format, style='{'
@@ -39,8 +40,12 @@ def lambda_handler(event, context):
 
     latest_summary = obtain_latest_summary(product_code='ETH_JPY', daily=False)
 
-    gen_execution_summaries(year=current_datetime.strftime('%Y'), month=current_datetime.strftime('%m'), day=-1,
-                            product_code='ETH_JPY')
+    gen_execution_summaries(
+        year=current_datetime.strftime('%Y'),
+        month=current_datetime.strftime('%m'),
+        day=current_datetime.strftime('%d'),
+        product_code='ETH_JPY'
+    )
 
     ai = AI(product_code='ETH_JPY', min_size_short=0.01,
             min_size_long=0.1, time_diff=9, latest_summary=latest_summary)
