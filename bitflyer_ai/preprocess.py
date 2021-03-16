@@ -22,7 +22,7 @@ BALANCE_LOG_DIR = 'balance_log'
 EXECUTION_HISTORY_DIR = 'execute_history'
 
 
-def get_executions_history(start_date, end_date, region='Asia/Tokyo', product_code='ETH_JPY', count=500, return_df=False):
+def get_executions_history(product_code, start_date, end_date, region='Asia/Tokyo',  count=500, return_df=False):
     logger.debug(
         f'[{start_date} - {end_date}] 取引履歴ダウンロード中...')
 
@@ -295,11 +295,14 @@ def make_summary_from_scratch(p_dir):
     return df_summary
 
 
-def make_summary_from_csv(p_dir='', summary_path_list=[], save=True):
+def make_summary_from_csv(product_code, p_dir='', summary_path_list=[], save=True):
     if p_dir != '':
         logger.debug(f'[{p_dir}] 集計データ更新中...')
     else:
-        if len(summary_path_list) == 1:
+        if len(summary_path_list) == 0:
+            logger.debug(f'対象となる集計データが存在しないため更新を終了します。')
+            return
+        elif len(summary_path_list) == 1:
             logger.debug(
                 f'[{summary_path_list[0]}] 集計データ更新中...'
             )
@@ -323,6 +326,10 @@ def make_summary_from_csv(p_dir='', summary_path_list=[], save=True):
                     summary_path_list.append(summary_path_tmp)
 
     for summary_path in summary_path_list:
+        if not product_code in summary_path:
+            logger.warning(
+                f'[{summary_path}] 対象のproduct_codeとは違うパスが含まれているため、読み込み対象外にします。')
+            continue
         if REF_LOCAL:
             df_summary_child = pd.read_csv(summary_path)
         else:
@@ -346,12 +353,6 @@ def make_summary_from_csv(p_dir='', summary_path_list=[], save=True):
             if df_summary.at['min_price', 'SELL'] > df_summary_child.at['min_price', 'SELL']:
                 df_summary.at['min_price',
                               'SELL'] = df_summary_child.at['min_price', 'SELL']
-
-            df_summary.at['size',
-                          'BUY'] += df_summary_child.at['size', 'BUY']
-
-            df_summary.at['size',
-                          'SELL'] += df_summary_child.at['size', 'SELL']
 
     if save and p_dir != '':
         p_summary_save_path = p_dir.joinpath('summary.csv')
@@ -378,12 +379,17 @@ def make_summary_from_csv(p_dir='', summary_path_list=[], save=True):
     return df_summary
 
 
-def make_summary(p_dir, daily=False):
+def make_summary(product_code, p_dir, daily=False):
     if daily:
-        p_1h_dir = p_dir.joinpath('1h')
-        make_summary_from_scratch(p_1h_dir)
+        p_1m_dir = p_dir.joinpath('1m')
+        make_summary_from_scratch(p_1m_dir)
     else:
-        make_summary_from_csv(p_dir)
+        make_summary_from_csv(
+            product_code=product_code,
+            p_dir=p_dir,
+            summary_path_list=[],
+            save=True
+        )
 
 
 def estimate_trends(latest_summary):
@@ -422,7 +428,7 @@ def estimate_trends(latest_summary):
     return latest_summary
 
 
-def obtain_latest_summary(product_code, daily=False):
+def obtain_latest_summary(product_code):
     logger.debug(f'[{product_code}] AI用集計データ取得中...')
     p_exe_history_dir = Path(EXECUTION_HISTORY_DIR)
     p_all_summary_path = p_exe_history_dir.joinpath(
@@ -439,7 +445,11 @@ def obtain_latest_summary(product_code, daily=False):
     before_32d_datetime = current_datetime - datetime.timedelta(days=32)
 
     df = get_executions_history(
-        start_date=before_2d_datetime, end_date=current_datetime, product_code='ETH_JPY', return_df=True)
+        product_code=product_code,
+        start_date=before_1d_datetime,
+        end_date=current_datetime,
+        return_df=True
+    )
 
     df_buy = df.query('side == "BUY"')
     df_sell = df.query('side == "SELL"')
@@ -463,10 +473,10 @@ def obtain_latest_summary(product_code, daily=False):
     df_sell_1d = df_sell_resampled.query('index > @before_1d_datetime')
 
     gen_execution_summaries(
+        product_code=product_code,
         year=current_datetime.strftime('%Y'),
         month=current_datetime.strftime('%m'),
-        day=current_datetime.strftime('%d'),
-        product_code='ETH_JPY'
+        day=current_datetime.strftime('%d')
     )
 
     # monthly summary
@@ -496,8 +506,9 @@ def obtain_latest_summary(product_code, daily=False):
                 target_monthly_summary_path_list.append(
                     str(p_target_monthly_summary_path)
                 )
-
     df_monthly_summary = make_summary_from_csv(
+        product_code=product_code,
+        p_dir='',
         summary_path_list=target_monthly_summary_path_list,
         save=False
     )
@@ -527,6 +538,8 @@ def obtain_latest_summary(product_code, daily=False):
                 )
 
     df_weekly_summary = make_summary_from_csv(
+        product_code=product_code,
+        p_dir='',
         summary_path_list=target_weekly_summary_path_list,
         save=False
     )
@@ -563,6 +576,8 @@ def obtain_latest_summary(product_code, daily=False):
                 )
 
     df_yearly_summary = make_summary_from_csv(
+        product_code=product_code,
+        p_dir='',
         summary_path_list=target_yearly_summary_path_list,
         save=False
     )
@@ -628,7 +643,6 @@ def obtain_latest_summary(product_code, daily=False):
             'all': {
                 'price': {
                     'max': df_all_summary.at['max_price', 'BUY'],
-                    'min': df_all_summary.at['min_price', 'BUY'],
                 },
                 'trend': 'DOWN',
             },
@@ -686,7 +700,6 @@ def obtain_latest_summary(product_code, daily=False):
             'all': {
                 'price': {
                     'max': df_all_summary.at['max_price', 'BUY'],
-                    'min': df_all_summary.at['min_price', 'BUY'],
                 },
                 'trend': 'DOWN',
             },
@@ -698,7 +711,7 @@ def obtain_latest_summary(product_code, daily=False):
     return latest_summary
 
 
-def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY'):
+def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
     logger.debug(f'[{product_code} {year} {month} {day}] 集計データ作成開始')
     p_save_base_dir = Path(EXECUTION_HISTORY_DIR)
     p_product_dir = p_save_base_dir.joinpath(product_code)
@@ -714,11 +727,11 @@ def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY')
                         if p_target_day_dir.is_dir():
                             p_day_dir = p_month_dir.joinpath(
                                 str(p_target_day_dir.name))
-                            make_summary(p_day_dir, daily=True)
+                            make_summary(product_code, p_day_dir, daily=True)
                 else:
                     p_day_dir = p_month_dir.joinpath(str(day))
-                    make_summary(p_day_dir, daily=True)
-                make_summary(p_month_dir)
+                    make_summary(product_code, p_day_dir, daily=True)
+                make_summary(product_code, p_month_dir)
         else:
             target_month_dir_list = s3.listdir(str(p_year_dir))
             for target_month_dir in target_month_dir_list:
@@ -738,12 +751,11 @@ def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY')
                             p_day_dir = p_month_dir.joinpath(
                                 dir_list[-1]
                             )
-                            make_summary(p_day_dir, daily=True)
+                            make_summary(product_code, p_day_dir, daily=True)
                 else:
                     p_day_dir = p_month_dir.joinpath(str(day))
-                    print(p_day_dir)
-                    make_summary(p_day_dir, daily=True)
-                make_summary(p_month_dir)
+                    make_summary(product_code, p_day_dir, daily=True)
+                make_summary(product_code, p_month_dir)
 
     else:
         p_month_dir = p_year_dir.joinpath(str(month))
@@ -754,7 +766,7 @@ def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY')
                         p_day_dir = p_month_dir.joinpath(
                             str(p_target_day_dir.name)
                         )
-                        make_summary(p_day_dir, daily=True)
+                        make_summary(product_code, p_day_dir, daily=True)
             else:
                 target_day_dir_list = s3.listdir(str(p_month_dir))
                 for target_day_dir in target_day_dir_list:
@@ -762,12 +774,12 @@ def gen_execution_summaries(year=2021, month=-1, day=-1, product_code='ETH_JPY')
                         p_day_dir = p_month_dir.joinpath(
                             target_day_dir.split('/')[-2]
                         )
-                        make_summary(p_day_dir, daily=True)
+                        make_summary(product_code, p_day_dir, daily=True)
         else:
             p_day_dir = p_month_dir.joinpath(str(day))
-            make_summary(p_day_dir, daily=True)
-        make_summary(p_month_dir)
+            make_summary(product_code, p_day_dir, daily=True)
+        make_summary(product_code, p_month_dir)
+    make_summary(product_code, p_year_dir)
+    make_summary(product_code, p_product_dir)
 
-    make_summary(p_year_dir)
-    make_summary(p_product_dir)
     logger.debug(f'[{product_code} {year} {month} {day}] 集計データ作成終了')

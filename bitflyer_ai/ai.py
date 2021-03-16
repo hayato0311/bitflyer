@@ -20,16 +20,14 @@ class AI:
 
     """
 
-    def __init__(self, latest_summary, product_code='ETH_JPY',
+    def __init__(self, latest_summary, product_code,
                  min_size_short=0.01, min_size_long=0.1,  time_diff=9, region='Asia/Tokyo',
                  bucket_name=''):
 
         self.product_code = product_code
 
         p_child_orders_dir = Path(CHILD_ORDERS_DIR)
-        p_child_orders_dir = p_child_orders_dir.joinpath(product_code)
-        self.product_code = product_code
-
+        p_child_orders_dir = p_child_orders_dir.joinpath(self.product_code)
         self.p_child_orders_path = {
             'long': p_child_orders_dir.joinpath('long_term.csv'),
             'short': p_child_orders_dir.joinpath('short_term.csv')
@@ -119,7 +117,10 @@ class AI:
         start_time = time.time()
         while child_orders_tmp.empty:
             child_orders_tmp = get_child_orders(
-                region='Asia/Tokyo', child_order_acceptance_id=child_order_acceptance_id)
+                product_code=self.product_code,
+                region='Asia/Tokyo',
+                child_order_acceptance_id=child_order_acceptance_id
+            )
             if time.time() - start_time > 5:
                 logger.warning(
                     f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
@@ -279,8 +280,8 @@ class AI:
 
             response = send_child_order(self.product_code, 'LIMIT', 'BUY',
                                         price=price, size=size)
+            response_json = response.json()
             if response.status_code == 200:
-                response_json = response.json()
                 print('================================================================')
                 logger.info(
                     f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!')
@@ -290,11 +291,6 @@ class AI:
                     child_order_acceptance_id=response_json['child_order_acceptance_id'],
                     child_order_cycle=child_order_cycle
                 )
-            else:
-                response_json = response.json()
-                logger.error(response_json['error_message'])
-                raise Exception(
-                    f"{term}_term {child_order_cycle} buying order was failed")
 
     def sell(self, term, child_order_cycle, rate):
         related_buy_order = self.child_orders[term].query(
@@ -329,11 +325,6 @@ class AI:
                     related_child_order_acceptance_id=response_json['child_order_acceptance_id'],
                     child_order_acceptance_id=related_buy_order.index[0]
                 )
-            else:
-                response_json = response.json()
-                logger.error(response_json['error_message'])
-                raise Exception(
-                    f"{term}_term {child_order_cycle} selling order was failed")
 
     def long_term(self):
         """

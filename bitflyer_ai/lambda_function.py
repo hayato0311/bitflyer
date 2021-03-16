@@ -8,14 +8,14 @@ from preprocess import *
 from manage import REF_LOCAL
 
 
-if LOCAL:
+if REF_LOCAL:
     sh = StreamHandler()
     fh = FileHandler('./logs/bitflyer_ai.log')
     format = '{asctime} {levelname:5} {filename} {funcName} {lineno}: {message}'
 
     basicConfig(
         handlers=[sh, fh],
-        level=INFO,
+        level=DEBUG,
         format=format, style='{'
     )
 else:
@@ -35,27 +35,53 @@ logger = getLogger(__name__)
 
 
 def lambda_handler(event, context):
-    current_datetime = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=9)))
-    logger.info('取引情報更新中...')
-    latest_summary = obtain_latest_summary(product_code='ETH_JPY', daily=False)
 
-    gen_execution_summaries(
-        year=current_datetime.strftime('%Y'),
-        month=current_datetime.strftime('%m'),
-        day=current_datetime.strftime('%d'),
-        product_code='ETH_JPY'
-    )
-    logger.info('取引情報更新完了')
+    # =============================================================
+    # BTC_JPY
+    # =============================================================
+    product_code = 'BTC_JPY'
+    if int(os.environ.get(product_code, 0)):
+        current_datetime = datetime.datetime.now(
+            datetime.timezone(datetime.timedelta(hours=9)))
+        logger.info(f'[{product_code}] 取引情報更新中...')
+        latest_summary = obtain_latest_summary(
+            product_code=product_code
+        )
+        logger.info(f'[{product_code}] 取引情報更新完了')
 
-    logger.info('注文中...')
+        logger.info(f'[{product_code}] 注文中...')
 
-    ai = AI(product_code='ETH_JPY', min_size_short=0.01,
-            min_size_long=0.1, time_diff=9, latest_summary=latest_summary)
-    ai.long_term()
-    ai.short_term()
+        ai = AI(product_code=product_code, min_size_short=0.001,
+                min_size_long=0.005, time_diff=9, latest_summary=latest_summary)
+        ai.long_term()
+        ai.short_term()
 
-    logger.info('注文完了')
+        logger.info(f'[{product_code}] 注文完了')
+
+    # =============================================================
+    # ETH_JPY
+    # =============================================================
+    product_code = 'ETH_JPY'
+    if int(os.environ.get(product_code, 0)):
+        current_datetime = datetime.datetime.now(
+            datetime.timezone(datetime.timedelta(hours=9)))
+        logger.info(f'[{product_code}] 取引情報更新中...')
+        latest_summary = obtain_latest_summary(
+            product_code=product_code
+        )
+
+        logger.info(f'[{product_code}] 取引情報更新完了')
+
+        logger.info(f'[{product_code}] 注文中...')
+
+        ai = AI(product_code=product_code, min_size_short=0.01,
+                min_size_long=0.1, time_diff=9, latest_summary=latest_summary)
+        ai.long_term()
+        ai.short_term()
+
+        logger.info(f'[{product_code}] 注文完了')
+
+    # =============================================================
 
     # start_date = end_date - datetime.timedelta(days=1)
     # df = get_executions_history(

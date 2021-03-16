@@ -116,15 +116,16 @@ class BitflyerAPI:
         else:
             headers = {'Content-Type': 'application/json'}
 
-        result = requests.get(
+        response = requests.get(
             self.api_url, headers=headers, params=self.params)
 
-        if result.status_code == 200:
+        if response.status_code == 200:
             logger.debug(f'[{name}] GETに成功しました！')
         else:
+            response_json = response.json()
             logger.error(
-                f'[{name} {result.json()["error_message"]}] GETに失敗しました。')
-        return result
+                f'[{name} {response_json["error_message"]}] GETに失敗しました。')
+        return response
 
     def post(self, body, name=''):
         headers = {
@@ -133,19 +134,32 @@ class BitflyerAPI:
             'ACCESS-SIGN': self.sign(body),
             'Content-Type': 'application/json'
         }
-        result = requests.post(self.api_url, headers=headers, json=body)
-        if result.status_code == 200:
+        response = requests.post(self.api_url, headers=headers, json=body)
+        if response.status_code == 200:
             logger.debug(f'[{name}] POSTに成功しました！')
         else:
-            logger.error(
-                f'[{name} {result.json()["error_message"]}] POSTに失敗しました。')
-        return result
+            response_json = response.json()
+            if response_json['status'] == -200:
+                logger.info(
+                    f'[{name}　{body["price"] * body["size"]}] 残高不足により、新規注文に失敗しました。')
+            elif response_json['status'] == -106:
+                logger.info(
+                    f'[{name} {body["price"]} {body["size"]}] 注文価格が低すぎるため、新規注文に失敗しました。')
+            elif response_json['status'] == -107:
+                logger.info(
+                    f'[{name} {body["price"]} {body["size"]}] 注文価格が高すぎるため、新規注文に失敗しました。')
+            elif response_json['status'] == -2:
+                logger.info(f'[{name}] メンテナンス中です。')
+            else:
+                logger.info(
+                    f'[{name} {result.status_code} {response_json["error_message"]} {body}] POSTに失敗しました。')
+        return response
 
 
 # HTTP_PUBLIC_API
 
 
-def get_ticker(product_code='ETH_JPY'):
+def get_ticker(product_code):
     """プロダクトの情報を取得
     Args:
         product_code (str, optional): 'BTC_JPY', 'ETH_BTC', 'BCH_BTC', 'ETH_JPY'が利用可能。デフォルト値は 'ETH_JPY'。
@@ -162,7 +176,7 @@ def get_ticker(product_code='ETH_JPY'):
     return result
 
 
-def get_executions(product_code='ETH_JPY', count=100, before=0, after=0, region='Asia/Tokyo'):
+def get_executions(product_code, count=100, before=0, after=0, region='Asia/Tokyo'):
     """約定履歴を取得
 
     Args:
@@ -185,9 +199,9 @@ def get_executions(product_code='ETH_JPY', count=100, before=0, after=0, region=
         params['after'] = after
 
     bf = BitflyerAPI(method, process_path, params=params)
-    result = bf.get(private=False, name='get_executions')
-    if result.status_code == 200:
-        df_result = pd.DataFrame(result.json())
+    response = bf.get(private=False, name='get_executions')
+    if response.status_code == 200:
+        df_result = pd.DataFrame(response.json())
         if not df_result.empty:
             df_result['exec_date'] = pd.to_datetime(
                 df_result['exec_date'], utc=True)
@@ -217,7 +231,7 @@ def get_balance():
     return df
 
 
-def get_child_orders(product_code='ETH_JPY', count=100, before=0, after=0,
+def get_child_orders(product_code, count=100, before=0, after=0,
                      child_order_state='',
                      child_order_id='', child_order_acceptance_id='',
                      parent_order_id='', region='Asia/Tokyo'):
