@@ -52,7 +52,7 @@ def lambda_handler(event, context):
         logger.info(f'[{product_code}] 注文中...')
 
         ai = AI(product_code=product_code, min_size_short=0.001,
-                min_size_long=0.005, time_diff=9, latest_summary=latest_summary)
+                min_size_long=0.002, time_diff=9, latest_summary=latest_summary)
         ai.long_term()
         ai.short_term()
 
