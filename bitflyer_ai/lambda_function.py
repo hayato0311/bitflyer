@@ -51,8 +51,8 @@ def lambda_handler(event, context):
 
         logger.info(f'[{product_code}] 注文中...')
 
-        ai = AI(product_code=product_code, min_size_short=0.001,
-                min_size_long=0.002, time_diff=9, latest_summary=latest_summary)
+        ai = AI(product_code=product_code, min_size_short=float(os.environ.get('MIN_SIZE_SHORT_BTC', 0.001)),
+                min_size_long=float(os.environ.get('MIN_SIZE_LONG_BTC', 0.001)), time_diff=9, latest_summary=latest_summary)
         ai.long_term()
         ai.short_term()
 
@@ -74,8 +74,8 @@ def lambda_handler(event, context):
 
         logger.info(f'[{product_code}] 注文中...')
 
-        ai = AI(product_code=product_code, min_size_short=0.01,
-                min_size_long=0.1, time_diff=9, latest_summary=latest_summary)
+        ai = AI(product_code=product_code, min_size_short=float(os.environ.get('MIN_SIZE_SHORT_ETH', 0.01)),
+                min_size_long=float(os.environ.get('MIN_SIZE_LONG_ETH', 0.01)), time_diff=9, latest_summary=latest_summary)
         ai.long_term()
         ai.short_term()
 

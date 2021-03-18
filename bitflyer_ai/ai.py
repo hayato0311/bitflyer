@@ -90,8 +90,8 @@ class AI:
         }
 
         self.max_buy_prices_rate = {
-            'long': 0.75,
-            'short': 0.80
+            'long': float(os.environ.get('MAX_BUY_PRICE_RATE_IN_LONG')),
+            'short': float(os.environ.get('MAX_BUY_PRICE_RATE_IN_SHORT')),
         }
 
     def delte_order(self, term, child_order_acceptance_id):
