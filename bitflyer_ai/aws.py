@@ -5,14 +5,18 @@ import pandas as pd
 from io import StringIO
 from manage import BUCKET_NAME
 import os
+from logging import getLogger
+import json
+
+logger = getLogger(__name__)
 
 
 class S3:
     def __init__(self):
         self.client = boto3.client('s3')
 
-        resource = boto3.resource('s3')
-        self.bucket = resource.Bucket(BUCKET_NAME)
+        self.resource = boto3.resource('s3')
+        self.bucket = self.resource.Bucket(BUCKET_NAME)
 
     def read_csv(self, object_key):
         # objkey = container_name + '/' + filename + '.csv'  # 多分普通のパス
@@ -44,6 +48,28 @@ class S3:
             path['Prefix'] for path in result_tmp.get('CommonPrefixes', [])
         ]
         return result
+
+    def delete_dir(self, dirpath):
+        objects_collection = self.bucket.objects.filter(
+            Prefix=dirpath
+        )
+        objects = []
+        for obj in objects_collection:
+            objects.append({'Key': obj.key})
+
+        if objects == []:
+            logger.debug(f'{dirpath} はすでに存在しません。')
+        else:
+            response = self.bucket.delete_objects(
+                Delete={
+                    "Objects": objects
+                }
+            )
+            response_json = response.json()
+            if response_json['HTTPStatusCode'] == 200:
+                logger.debug(f'[{dirpath}] ディレクトリの削除に成功しました。')
+            else:
+                logger.warning(f'[{dirpath}] ディレクトリの削除に失敗しました。')
 
 
 def decrypt(encrypted):

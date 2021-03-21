@@ -783,3 +783,24 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
     make_summary(product_code, p_product_dir)
 
     logger.debug(f'[{product_code} {year} {month} {day}] 集計データ作成終了')
+
+
+def delete_row_data(product_code, current_datetime, days):
+    before_7d_datetime = current_datetime - datetime.timedelta(days=days)
+    p_dir = Path(EXECUTION_HISTORY_DIR)
+    p_target_dir = p_dir.joinpath(
+        product_code,
+        before_7d_datetime.strftime('%Y'),
+        before_7d_datetime.strftime('%m'),
+        before_7d_datetime.strftime('%d'),
+        'row'
+    )
+
+    if REF_LOCAL:
+        if p_target_dir.is_dir():
+            for filename in ['all.csv', 'buy.csv', 'sell.csv']:
+                p_target_path = p_target_dir.joinpath(filename)
+                p_target_path.unlink()
+            p_target_dir.rmdir()
+    else:
+        s3.delete_dir(str(p_target_dir))
