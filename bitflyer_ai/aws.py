@@ -65,8 +65,7 @@ class S3:
                     "Objects": objects
                 }
             )
-            response_json = response.json()
-            if response_json['HTTPStatusCode'] == 200:
+            if response['ResponseMetadata']['HTTPStatusCode'] == 200:
                 logger.debug(f'[{dirpath}] ディレクトリの削除に成功しました。')
             else:
                 logger.warning(f'[{dirpath}] ディレクトリの削除に失敗しました。')
