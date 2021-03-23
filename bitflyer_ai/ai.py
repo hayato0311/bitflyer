@@ -139,9 +139,10 @@ class AI:
             else:
                 self.child_orders[term].loc[child_order_acceptance_id] = child_orders_tmp.loc[child_order_acceptance_id]
 
-            if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED':
+            if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED' \
+                    and self.child_orders[term].at[child_order_acceptance_id, 'related_child_order_acceptance_id'] == 'no_id':
                 logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "child_order_type"]} {child_order_acceptance_id}] 約定しました!'
+                    f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
                 )
 
                 if self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
@@ -260,7 +261,8 @@ class AI:
             # ----------------------------------------------------------------
             if not same_category_order.empty:
                 if len(same_category_order) >= 2:
-                    logger.error('同じサイクルを持つACTIVEな買い注文が2つ以上あります。')
+                    logger.error(
+                        f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。')
                 logger.info(
                     f'[{term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、前回の注文をキャンセルし、新規の買い注文を行います。'
                 )
@@ -300,31 +302,37 @@ class AI:
                 f'[{term}, {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。')
         else:
             if len(related_buy_order) >= 2:
-                logger.error('同じフラグを持つ約定済みの買い注文が2つあります。')
-
-            price = int(int(related_buy_order['price']) * rate)
-            size = round(float(related_buy_order['size']), 3)
-            response = send_child_order(self.product_code, 'LIMIT', 'SELL',
-                                        price=price, size=size)
-            if response.status_code == 200:
-                response_json = response.json()
-                print('================================================================')
-                logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} {int(int(related_buy_order["price"]) * (rate-1)) * size}] 売り注文に成功しました！！')
-                print('================================================================')
-
-                self.update_child_orders(
-                    term=term,
-                    child_order_cycle=child_order_cycle,
-                    related_child_order_acceptance_id=related_buy_order.index[0],
-                    child_order_acceptance_id=response_json['child_order_acceptance_id'],
+                logger.warning(
+                    f'[{term}, {child_order_cycle}] 同じフラグを持つ約定済みの買い注文が2つあります。'
                 )
-                self.update_child_orders(
-                    term=term,
-                    child_order_cycle=child_order_cycle,
-                    related_child_order_acceptance_id=response_json['child_order_acceptance_id'],
-                    child_order_acceptance_id=related_buy_order.index[0]
-                )
+            for i in range(len(related_buy_order)):
+                price = int(int(related_buy_order['price'].values[i]) * rate)
+                if price < self.latest_summary['SELL']['1h']['price']['max']:
+                    price = self.latest_summary['SELL']['1h']['price']['max']
+                size = round(float(related_buy_order['size'].values[i]), 3)
+                response = send_child_order(self.product_code, 'LIMIT', 'SELL',
+                                            price=price, size=size)
+                if response.status_code == 200:
+                    response_json = response.json()
+                    print(
+                        '================================================================')
+                    logger.info(
+                        f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} {int(int(related_buy_order["price"].values[i]) * (rate-1)) * size}] 売り注文に成功しました！！')
+                    print(
+                        '================================================================')
+
+                    self.update_child_orders(
+                        term=term,
+                        child_order_cycle=child_order_cycle,
+                        related_child_order_acceptance_id=related_buy_order.index[i],
+                        child_order_acceptance_id=response_json['child_order_acceptance_id'],
+                    )
+                    self.update_child_orders(
+                        term=term,
+                        child_order_cycle=child_order_cycle,
+                        related_child_order_acceptance_id=response_json['child_order_acceptance_id'],
+                        child_order_acceptance_id=related_buy_order.index[i]
+                    )
 
     def long_term(self):
         """
@@ -339,36 +347,21 @@ class AI:
         # 最新情報を取得
         self.update_child_orders(term='long')
 
-        # =================================================================
-        # 条件1:
-        #   - 周期:daily
-        #   - 指値注文価格: １日の最安値の80%
-        #   - サイズ: middle
-        # =================================================================
+        # daily
         self.buy(
             term='long',
             child_order_cycle='daily',
             local_prices=self.latest_summary['BUY']['1d']['price']
         )
 
-        # =================================================================
-        # 条件2:
-        #   - 周期: weekly
-        #   - 指値注文価格: １週間の最安値の70%
-        #   - サイズ: large
-        # =================================================================
+        # weekly
         self.buy(
             term='long',
             child_order_cycle='weekly',
             local_prices=self.latest_summary['BUY']['1w']['price']
         )
 
-        # =================================================================
-        # 条件3:
-        #   - 周期: monthly
-        #   - 指値注文価格: １ヶ月間の最安値の75%
-        #   - サイズ: middle
-        # =================================================================
+        # monthly
         self.buy(
             term='long',
             child_order_cycle='monthly',
@@ -389,8 +382,6 @@ class AI:
         条件1: short_hourly_buy_complitedがあり、related_child_order_acceptance_idが'no_id'の場合、その指値注文の110%の価格で指値注文を入れる。(10000円以上)
         条件2: short_daily_buy_complitedがあり、related_child_order_acceptance_idが'no_id'の場合、その指値注文の105%上の価格で指値注文を入れる。(1000円単位)
         条件3: short_weekly_buy_complitedがあり、related_child_order_acceptance_idが'no_id'の場合、その指値注文の115%の価格で指値注文を入れる。(1000円単位)
-
-
         """
 
         # 最新情報を取得
@@ -400,30 +391,21 @@ class AI:
         # 買い注文
         # =================================================================
 
-        # =================================================================
-        # 条件1:
-        #   - 周期:hourly
-        # =================================================================
+        # hourly
         self.buy(
             term='short',
             child_order_cycle='hourly',
             local_prices=self.latest_summary['BUY']['1h']['price']
         )
 
-        # =================================================================
-        # 条件2:
-        #   - 周期:daily
-        # =================================================================
+        # daily
         self.buy(
             term='short',
             child_order_cycle='daily',
             local_prices=self.latest_summary['BUY']['1d']['price']
         )
 
-        # =================================================================
-        # 条件3:
-        #   - 周期:weekly
-        # =================================================================
+        # weekly
         self.buy(
             term='short',
             child_order_cycle='weekly',
@@ -438,36 +420,23 @@ class AI:
             logger.info(f'[short] 買い注文がないため、売り注文はできません。')
             return
 
-        # =================================================================
-        # 条件1:
-        #   - 周期:hourly
-        #   - 指値注文価格: 購入価格の180%
-        # =================================================================
+        # hourly
         self.sell(
             term='short',
             child_order_cycle='hourly',
-            rate=1.80
+            rate=float(os.environ.get('SELL_RATE_SHORT_HOURLY', 1.10))
         )
 
-        # =================================================================
-        # 条件2:
-        #   - 周期:daily
-        #   - 指値注文価格: 購入価格の190%
-        # =================================================================
+        # daily
         self.sell(
             term='short',
             child_order_cycle='daily',
-            rate=1.90
+            rate=float(os.environ.get('SELL_RATE_SHORT_DAILY', 1.20))
         )
 
-        # =================================================================
-        # 条件3:
-        #   - 周期:weekly
-        #   - 指値注文価格: 購入価格の200%
-        # =================================================================
-
+        # weekly
         self.sell(
             term='short',
             child_order_cycle='weekly',
-            rate=2.00
+            rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.30))
         )
