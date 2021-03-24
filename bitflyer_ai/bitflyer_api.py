@@ -123,8 +123,12 @@ class BitflyerAPI:
             logger.debug(f'[{name}] GETに成功しました！')
         else:
             response_json = response.json()
-            logger.error(
-                f'[{name} {response_json["error_message"]}] GETに失敗しました。')
+            if response_json['status'] == -1:
+                logger.warning(
+                    f'[{name} ] BitflyerAPIの呼び出し制限回数を超えたため、GETに失敗しました。')
+            else:
+                logger.error(
+                    f'[{name} {response_json["error_message"]}] GETに失敗しました。')
         return response
 
     def post(self, body, name=''):

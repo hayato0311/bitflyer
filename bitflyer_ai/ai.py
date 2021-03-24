@@ -217,24 +217,24 @@ class AI:
 
     def buy(self, term, child_order_cycle, local_prices):
         global_prices = self.latest_summary['BUY']['all']['price']
-        if 1 - local_prices['min'] / global_prices['max'] > 1 / 2:
+        if 1 - local_prices['low'] / global_prices['high'] > 1 / 2:
             price_rate = 1
         else:
             price_rate = -4 * (1 - self.max_buy_prices_rate[term]) * (
-                1 - local_prices['min'] / global_prices['max']) ** 2 + 1
+                1 - local_prices['low'] / global_prices['high']) ** 2 + 1
             # price_rate = 2 * (1 - self.max_buy_prices_rate[term]) * (
-            #     1 - local_prices['min'] / global_prices['max']) + self.max_buy_prices_rate[term]
+            #     1 - local_prices['low'] / global_prices['high']) + self.max_buy_prices_rate[term]
             # price_rate = 4 * (1 - self.max_buy_prices_rate[term]) * (
-            #     1 - local_prices['min'] / global_prices['max']) ** 2 + self.max_buy_prices_rate[term]
+            #     1 - local_prices['low'] / global_prices['high']) ** 2 + self.max_buy_prices_rate[term]
 
-        price = int(local_prices['min'] * price_rate)
-        if price >= global_prices['max'] * self.max_buy_prices_rate[term]:
+        price = int(local_prices['low'] * price_rate)
+        if price >= global_prices['high'] * self.max_buy_prices_rate[term]:
             logger.info(
                 f'[{term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。')
             return
 
         size_rate = 32 * (self.max_buy_prices_rate[term] -
-                          price / global_prices['max']) ** 2 + 1
+                          price / global_prices['high']) ** 2 + 1
 
         size = self.min_size[term] * size_rate
 
@@ -246,12 +246,20 @@ class AI:
         if not self.child_orders[term].empty:
             target_buy_history = self.child_orders[term].query(
                 'child_order_date > @target_datetime  and child_order_cycle == @child_order_cycle')
+            target_buy_history_completed = target_buy_history.query(
+                'child_order_state == "COMPLETED"')
             same_category_order = self.child_orders[term].query(
                 'child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle').copy()
 
         if not target_buy_history.empty and not target_buy_history.empty:
             logger.info(
                 f'[{term} {child_order_cycle}] すでに注文済みのため、購入できません。'
+            )
+            return
+
+        if not target_buy_history_completed.empty:
+            logger.info(
+                f'[{term} {child_order_cycle}] すでに約定済みの注文があるため、新規の買い注文はできません。'
             )
             return
 
@@ -307,8 +315,8 @@ class AI:
                 )
             for i in range(len(related_buy_order)):
                 price = int(int(related_buy_order['price'].values[i]) * rate)
-                if price < self.latest_summary['SELL']['1h']['price']['max']:
-                    price = self.latest_summary['SELL']['1h']['price']['max']
+                if price < self.latest_summary['SELL']['1h']['price']['high']:
+                    price = self.latest_summary['SELL']['1h']['price']['high']
                 size = round(float(related_buy_order['size'].values[i]), 3)
                 response = send_child_order(self.product_code, 'LIMIT', 'SELL',
                                             price=price, size=size)
@@ -369,20 +377,6 @@ class AI:
         )
 
     def short_term(self):
-        """
-        [買い注文]
-        絶対条件: 過去最高額の75%範囲内では購入しない。
-        条件1: short_termとして、1時間で1回も買っていない、またはshort_hourly_buy_activeがない場合、1時間での最安値の90%の価格で指値注文を入れる。(10000円以上)
-        条件2: short_termとして、１日間で1回も買っていない、またはshort_daily_buy_activeがない場合、１日での最安値の95%の価格で指値注文を入れる。(1000円単位)
-        条件3: short_termとして、１週間で1回も買っていない、またはshort_weekly_buy_activeがない場合、１週間での最安値の85%の価格で指値注文を入れる。(1000円単位)
-
-        ただし、前回の指値注文がACTIVEな場合はその注文を取り消す。
-
-        [売り注文]
-        条件1: short_hourly_buy_complitedがあり、related_child_order_acceptance_idが'no_id'の場合、その指値注文の110%の価格で指値注文を入れる。(10000円以上)
-        条件2: short_daily_buy_complitedがあり、related_child_order_acceptance_idが'no_id'の場合、その指値注文の105%上の価格で指値注文を入れる。(1000円単位)
-        条件3: short_weekly_buy_complitedがあり、related_child_order_acceptance_idが'no_id'の場合、その指値注文の115%の価格で指値注文を入れる。(1000円単位)
-        """
 
         # 最新情報を取得
         self.update_child_orders(term='short')
