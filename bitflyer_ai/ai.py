@@ -139,11 +139,11 @@ class AI:
             else:
                 self.child_orders[term].loc[child_order_acceptance_id] = child_orders_tmp.loc[child_order_acceptance_id]
 
-            if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED' \
-                    and self.child_orders[term].at[child_order_acceptance_id, 'related_child_order_acceptance_id'] == 'no_id':
-                logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
-                )
+            if self.child_orders[term].at[child_order_acceptance_id, 'child_order_state'] == 'COMPLETED':
+                if self.child_orders[term].at[child_order_acceptance_id, 'related_child_order_acceptance_id'] == 'no_id':
+                    logger.info(
+                        f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
+                    )
 
                 if self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
                     profit = self.child_orders[term].at[child_order_acceptance_id, 'price'] * \
@@ -389,7 +389,7 @@ class AI:
         self.buy(
             term='short',
             child_order_cycle='hourly',
-            local_prices=self.latest_summary['BUY']['1h']['price']
+            local_prices=self.latest_summary['BUY']['6h']['price']
         )
 
         # daily

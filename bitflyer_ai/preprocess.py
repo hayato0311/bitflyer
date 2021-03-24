@@ -446,6 +446,7 @@ def obtain_latest_summary(product_code):
     before_1m_datetime = current_datetime - datetime.timedelta(minutes=1)
     before_10m_datetime = current_datetime - datetime.timedelta(minutes=10)
     before_1h_datetime = current_datetime - datetime.timedelta(hours=1)
+    before_6h_datetime = current_datetime - datetime.timedelta(hours=6)
     before_1d_datetime = current_datetime - datetime.timedelta(days=1)
     before_2d_datetime = current_datetime - datetime.timedelta(days=2)
     before_7d_datetime = current_datetime - datetime.timedelta(days=7)
@@ -474,6 +475,9 @@ def obtain_latest_summary(product_code):
 
     df_buy_1h = df_buy_resampled.query('index > @before_1h_datetime')
     df_sell_1h = df_sell_resampled.query('index > @before_1h_datetime')
+
+    df_buy_6h = df_buy_resampled.query('index > @before_6h_datetime')
+    df_sell_6h = df_sell_resampled.query('index > @before_6h_datetime')
 
     df_buy_1d = df_buy_resampled.query('index > @before_1d_datetime')
     df_sell_1d = df_sell_resampled.query('index > @before_1d_datetime')
@@ -625,6 +629,15 @@ def obtain_latest_summary(product_code):
                 },
                 'trend': 'DOWN',
             },
+            '6h': {
+                'price': {
+                    'open': df_buy_6h['open_price'].values[0],
+                    'high': df_buy_6h['high_price'].max(),
+                    'low': df_buy_6h['low_price'].min(),
+                    'close': df_buy_6h['close_price'].values[-1],
+                },
+                'trend': 'DOWN',
+            },
             '1d': {
                 'price': {
                     'open': df_buy_1d['open_price'].values[0],
@@ -696,6 +709,15 @@ def obtain_latest_summary(product_code):
                     'high': df_sell_1h['high_price'].max(),
                     'low': df_sell_1h['low_price'].min(),
                     'close': df_sell_1h['close_price'].values[-1],
+                },
+                'trend': 'DOWN',
+            },
+            '6h': {
+                'price': {
+                    'open': df_sell_6h['open_price'].values[0],
+                    'high': df_sell_6h['high_price'].max(),
+                    'low': df_sell_6h['low_price'].min(),
+                    'close': df_sell_6h['close_price'].values[-1],
                 },
                 'trend': 'DOWN',
             },
