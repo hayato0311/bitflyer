@@ -40,24 +40,24 @@ def lambda_handler(event, context):
     # BTC_JPY
     # =============================================================
     product_code = 'BTC_JPY'
+    current_datetime = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=9)))
+
+    logger.info(f'[{product_code}] 不必要な生データを削除中...')
+    delete_row_data(
+        product_code=product_code,
+        current_datetime=current_datetime,
+        days=7
+    )
+    logger.info(f'[{product_code}] 不必要な生データの削除完了')
+
+    logger.info(f'[{product_code}] 取引情報更新中...')
+    latest_summary = obtain_latest_summary(
+        product_code=product_code
+    )
+    logger.info(f'[{product_code}] 取引情報更新完了')
+
     if int(os.environ.get(product_code, 0)):
-        current_datetime = datetime.datetime.now(
-            datetime.timezone(datetime.timedelta(hours=9)))
-
-        logger.info(f'[{product_code}] 不必要な生データを削除中...')
-        delete_row_data(
-            product_code=product_code,
-            current_datetime=current_datetime,
-            days=7
-        )
-        logger.info(f'[{product_code}] 不必要な生データの削除完了')
-
-        logger.info(f'[{product_code}] 取引情報更新中...')
-        latest_summary = obtain_latest_summary(
-            product_code=product_code
-        )
-        logger.info(f'[{product_code}] 取引情報更新完了')
-
         logger.info(f'[{product_code}] 注文中...')
         ai = AI(
             product_code=product_code,
@@ -74,23 +74,23 @@ def lambda_handler(event, context):
     # ETH_JPY
     # =============================================================
     product_code = 'ETH_JPY'
+    current_datetime = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=9)))
+
+    logger.info(f'[{product_code}] 不必要な生データを削除中...')
+    delete_row_data(
+        product_code=product_code,
+        current_datetime=current_datetime,
+        days=7
+    )
+    logger.info(f'[{product_code}] 不必要な生データの削除完了')
+
+    logger.info(f'[{product_code}] 取引情報更新中...')
+    latest_summary = obtain_latest_summary(
+        product_code=product_code
+    )
+    logger.info(f'[{product_code}] 取引情報更新完了')
     if int(os.environ.get(product_code, 0)):
-        current_datetime = datetime.datetime.now(
-            datetime.timezone(datetime.timedelta(hours=9)))
-
-        logger.info(f'[{product_code}] 不必要な生データを削除中...')
-        delete_row_data(
-            product_code=product_code,
-            current_datetime=current_datetime,
-            days=7
-        )
-        logger.info(f'[{product_code}] 不必要な生データの削除完了')
-
-        logger.info(f'[{product_code}] 取引情報更新中...')
-        latest_summary = obtain_latest_summary(
-            product_code=product_code
-        )
-        logger.info(f'[{product_code}] 取引情報更新完了')
 
         logger.info(f'[{product_code}] 注文中...')
         ai = AI(
