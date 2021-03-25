@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 from logging import getLogger
 from manage import REF_LOCAL, BUCKET_NAME
+import os
 
 logger = getLogger(__name__)
 
@@ -343,94 +344,75 @@ class AI:
                     )
 
     def long_term(self):
-        """
-        [買い注文]
-        絶対条件: 過去最高額の70%範囲内では購入しない。
-        条件1: long_termとして、１日間で1回も買っていない、またはlong_daily_activeがない場合、１日での最安値の80%の価格で指値注文を入れる。(10000円以上)
-        条件2: long_termとして、１週間で1回も買っていない、またはlong_weekly_activeがない場合、１週間での最安値の70%の価格で指値注文を入れる。(10000円以上)
-        条件3: long_termとして、１ヶ月間で1回も買っていない、またはlong_monthly_activeがない場合、１ヶ月間での最安値の75%の価格で指値注文を入れる。(10000円以上)
-
-        ただし、前回の指値注文がACTIVEな場合はその注文を取り消す。
-        """
         # 最新情報を取得
         self.update_child_orders(term='long')
 
-        # daily
-        self.buy(
-            term='long',
-            child_order_cycle='daily',
-            local_prices=self.latest_summary['BUY']['1d']['price']
-        )
+        if int(os.environ.get('LONG_DAILY', 0)):
+            # daily
+            self.buy(
+                term='long',
+                child_order_cycle='daily',
+                local_prices=self.latest_summary['BUY']['1d']['price']
+            )
 
-        # weekly
-        self.buy(
-            term='long',
-            child_order_cycle='weekly',
-            local_prices=self.latest_summary['BUY']['1w']['price']
-        )
+        if int(os.environ.get('LONG_WEEKLY', 1)):
+            # weekly
+            self.buy(
+                term='long',
+                child_order_cycle='weekly',
+                local_prices=self.latest_summary['BUY']['1w']['price']
+            )
 
-        # monthly
-        self.buy(
-            term='long',
-            child_order_cycle='monthly',
-            local_prices=self.latest_summary['BUY']['1m']['price']
-        )
+        if int(os.environ.get('LONG_MONTHLY', 0)):
+            # monthly
+            self.buy(
+                term='long',
+                child_order_cycle='monthly',
+                local_prices=self.latest_summary['BUY']['1m']['price']
+            )
 
     def short_term(self):
 
         # 最新情報を取得
         self.update_child_orders(term='short')
 
-        # =================================================================
-        # 買い注文
-        # =================================================================
+        if int(os.environ.get('SHORT_HOURLY', 1)):
+            # hourly
+            self.buy(
+                term='short',
+                child_order_cycle='hourly',
+                local_prices=self.latest_summary['BUY']['6h']['price']
+            )
 
-        # hourly
-        self.buy(
-            term='short',
-            child_order_cycle='hourly',
-            local_prices=self.latest_summary['BUY']['6h']['price']
-        )
+            self.sell(
+                term='short',
+                child_order_cycle='hourly',
+                rate=float(os.environ.get('SELL_RATE_SHORT_HOURLY', 1.10))
+            )
 
-        # daily
-        self.buy(
-            term='short',
-            child_order_cycle='daily',
-            local_prices=self.latest_summary['BUY']['1d']['price']
-        )
+        if int(os.environ.get('SHORT_DAILY', 0)):
+            # daily
+            self.buy(
+                term='short',
+                child_order_cycle='daily',
+                local_prices=self.latest_summary['BUY']['1d']['price']
+            )
 
-        # weekly
-        self.buy(
-            term='short',
-            child_order_cycle='weekly',
-            local_prices=self.latest_summary['BUY']['1w']['price']
-        )
+            self.sell(
+                term='short',
+                child_order_cycle='daily',
+                rate=float(os.environ.get('SELL_RATE_SHORT_DAILY', 1.10))
+            )
 
-        # =================================================================
-        # 売り注文
-        # =================================================================
-
-        if self.child_orders['short'].empty:
-            logger.info(f'[short] 買い注文がないため、売り注文はできません。')
-            return
-
-        # hourly
-        self.sell(
-            term='short',
-            child_order_cycle='hourly',
-            rate=float(os.environ.get('SELL_RATE_SHORT_HOURLY', 1.10))
-        )
-
-        # daily
-        self.sell(
-            term='short',
-            child_order_cycle='daily',
-            rate=float(os.environ.get('SELL_RATE_SHORT_DAILY', 1.20))
-        )
-
-        # weekly
-        self.sell(
-            term='short',
-            child_order_cycle='weekly',
-            rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.30))
-        )
+        if int(os.environ.get('SHORT_WEEKLY', 0)):
+            # weekly
+            self.buy(
+                term='short',
+                child_order_cycle='weekly',
+                local_prices=self.latest_summary['BUY']['1w']['price']
+            )
+            self.sell(
+                term='short',
+                child_order_cycle='weekly',
+                rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.10))
+            )
