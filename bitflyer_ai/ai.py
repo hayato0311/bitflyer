@@ -246,13 +246,15 @@ class AI:
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
             target_buy_history = self.child_orders[term].query(
-                'child_order_date > @target_datetime  and child_order_cycle == @child_order_cycle')
+                'side == "BUY" and child_order_date > @target_datetime and child_order_cycle == @child_order_cycle')
+            target_buy_history_active = target_buy_history.query(
+                'child_order_state == "ACTIVE"')
             target_buy_history_completed = target_buy_history.query(
                 'child_order_state == "COMPLETED"')
             same_category_order = self.child_orders[term].query(
-                'child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle').copy()
+                'side == "BUY" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle').copy()
 
-        if not target_buy_history.empty and not target_buy_history.empty:
+        if not same_category_order.empty:
             logger.info(
                 f'[{term} {child_order_cycle}] すでに注文済みのため、購入できません。'
             )
@@ -260,11 +262,11 @@ class AI:
 
         if not target_buy_history_completed.empty:
             logger.info(
-                f'[{term} {child_order_cycle}] すでに約定済みの注文があるため、新規の買い注文はできません。'
+                f'[{term} {child_order_cycle}] 約定済みの注文から十分な時間が経過していないため、新規の買い注文はできません。'
             )
             return
 
-        if target_buy_history.empty or same_category_order.empty:
+        if target_buy_history_active.empty or same_category_order.empty:
             # ----------------------------------------------------------------
             # 同じカテゴリーの注文がすでに存在していた場合、前の注文をキャンセルする。
             # ----------------------------------------------------------------
@@ -312,7 +314,7 @@ class AI:
         else:
             if len(related_buy_order) >= 2:
                 logger.warning(
-                    f'[{term}, {child_order_cycle}] 同じフラグを持つ約定済みの買い注文が2つあります。'
+                    f'[{term}, {child_order_cycle}] 同じフラグを持つ約定済みの買い注文が2つ以上あります。'
                 )
             for i in range(len(related_buy_order)):
                 price = int(int(related_buy_order['price'].values[i]) * rate)
