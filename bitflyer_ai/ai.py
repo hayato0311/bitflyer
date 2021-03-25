@@ -77,7 +77,7 @@ class AI:
             'now': datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))),
         }
         self.datetime_references['hourly'] = \
-            self.datetime_references['now'] - datetime.timedelta(hours=1)
+            self.datetime_references['now'] - datetime.timedelta(hours=6)
         self.datetime_references['daily'] = \
             self.datetime_references['now'] - datetime.timedelta(days=1)
         self.datetime_references['weekly'] = \
