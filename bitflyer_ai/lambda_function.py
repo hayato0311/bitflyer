@@ -34,12 +34,13 @@ else:
 logger = getLogger(__name__)
 
 
-def lambda_handler(event, context):
+def trading(product_code):
+    board_state = get_board_state(product_code)
+    if board_state['state'] != 'RUNNING':
+        logger.info(
+            f'[{product_code} {board_state["state"]}] 現在取引所は稼働していません。')
+        return
 
-    # =============================================================
-    # BTC_JPY
-    # =============================================================
-    product_code = 'BTC_JPY'
     current_datetime = datetime.datetime.now(
         datetime.timezone(datetime.timedelta(hours=9)))
 
@@ -61,54 +62,37 @@ def lambda_handler(event, context):
         logger.info(f'[{product_code}] 注文中...')
         ai = AI(
             product_code=product_code,
-            min_size_short=float(os.environ.get('MIN_SIZE_SHORT_BTC', 0.001)),
-            min_size_long=float(os.environ.get('MIN_SIZE_LONG_BTC', 0.001)),
+            min_size_short=float(os.environ.get(
+                f'{product_code}_SHORT_MIN_SIZE', 0.001)),
+            min_size_long=float(os.environ.get(
+                f'{product_code}_LONG_MIN_SIZE', 0.001)),
             time_diff=9,
             latest_summary=latest_summary
         )
-        ai.long_term()
-        ai.short_term()
+        if int(os.environ.get(f'{product_code}_LONG', 0)):
+            ai.long_term()
+        if int(os.environ.get(f'{product_code}_SHORT', 0)):
+            ai.short_term()
         logger.info(f'[{product_code}] 注文完了')
+
+
+def lambda_handler(event, context):
+    # =============================================================
+    # BTC_JPY
+    # =============================================================
+    trading(product_code='BTC_JPY')
 
     # =============================================================
     # ETH_JPY
     # =============================================================
-    product_code = 'ETH_JPY'
-    current_datetime = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=9)))
-
-    logger.info(f'[{product_code}] 不必要な生データを削除中...')
-    delete_row_data(
-        product_code=product_code,
-        current_datetime=current_datetime,
-        days=7
-    )
-    logger.info(f'[{product_code}] 不必要な生データの削除完了')
-
-    logger.info(f'[{product_code}] 取引情報更新中...')
-    latest_summary = obtain_latest_summary(
-        product_code=product_code
-    )
-    logger.info(f'[{product_code}] 取引情報更新完了')
-    if int(os.environ.get(product_code, 0)):
-
-        logger.info(f'[{product_code}] 注文中...')
-        ai = AI(
-            product_code=product_code,
-            min_size_short=float(os.environ.get('MIN_SIZE_SHORT_ETH', 0.01)),
-            min_size_long=float(os.environ.get('MIN_SIZE_LONG_ETH', 0.01)),
-            time_diff=9,
-            latest_summary=latest_summary
-        )
-        ai.long_term()
-        ai.short_term()
-        logger.info(f'[{product_code}] 注文完了')
+    trading(product_code='ETH_JPY')
 
     # =============================================================
 
     # start_date = end_date - datetime.timedelta(days=1)
     # df = get_executions_history(
-    #     start_date=start_date, end_date=end_date, product_code='ETH_JPY', count=500)
+    # start_date=start_date, end_date=end_date, product_code='ETH_JPY',
+    # count=500)
 
     # # get_ticker()
     # df_balance = get_balance()
@@ -120,7 +104,8 @@ def lambda_handler(event, context):
     # print(df_balance)
 
     # df_child_orders = get_child_orders(
-    #     region='Asia/Tokyo', child_order_acceptance_id='JRF20210302-153421-352775')
+    # region='Asia/Tokyo',
+    # child_order_acceptance_id='JRF20210302-153421-352775')
 
     # df_child_orders.to_csv('child_orders/ETH_JPY/all.csv')
     # print(df_child_orders)

@@ -30,6 +30,7 @@ HTTP_PUBLIC_API = {
         'market_list': '/v1/getmarkets',
         'ticker': '/v1/getticker',
         'executions': '/v1/getexecutions',
+        'board_state': '/v1/getboardstate'
     }
 }
 
@@ -39,9 +40,8 @@ HTTP_PRIVATE_API = {
     'GET': {
         'withdraw_history': '/v1/me/getwithdrawals',
         'balance': '/v1/me/getbalance',
-        'coin_in_history': '/v1/me/getcoinins',
-        'coin_out_history': '/v1/me/getcoinins',
-        'child_orders': '/v1/me/getchildorders'
+        'child_orders': '/v1/me/getchildorders',
+        'trading_commission': '/v1/me/gettradingcommission'
 
     },
     'POST': {
@@ -102,8 +102,10 @@ class BitflyerAPI:
         else:
             raise ValueError('Method name is not correct. set "GET" or "POST"')
 
-        return hmac.new(self.api_secret.encode('utf-8'), payload.encode('utf-8'),
-                        hashlib.sha256).hexdigest()
+        return hmac.new(
+            self.api_secret.encode('utf-8'),
+            payload.encode('utf-8'),
+            hashlib.sha256).hexdigest()
 
     def get(self, private=True, name=''):
         if private:
@@ -162,6 +164,23 @@ class BitflyerAPI:
 
 # HTTP_PUBLIC_API
 
+def get_board_state(product_code):
+    """板情報を取得
+    Args:
+        product_code (str, optional): 'BTC_JPY', 'ETH_BTC', 'BCH_BTC', 'ETH_JPY'が利用可能。デフォルト値は 'ETH_JPY'。
+    Returns:
+        dict: レスポンス
+    """
+    method = 'GET'
+    process_path = HTTP_PUBLIC_API[method]['ticker']
+    params = {'product_code': product_code}
+
+    bf = BitflyerAPI(method, process_path, params=params)
+    response = bf.get(private=False)
+    response_json = response.json()
+
+    return response_json
+
 
 def get_ticker(product_code):
     """プロダクトの情報を取得
@@ -180,7 +199,12 @@ def get_ticker(product_code):
     return result
 
 
-def get_executions(product_code, count=100, before=0, after=0, region='Asia/Tokyo'):
+def get_executions(
+        product_code,
+        count=100,
+        before=0,
+        after=0,
+        region='Asia/Tokyo'):
     """約定履歴を取得
 
     Args:
@@ -233,6 +257,20 @@ def get_balance():
     df = pd.DataFrame(result.json())
 
     return df
+
+
+def get_trading_commission(product_code):
+    method = 'GET'
+    process_path = HTTP_PRIVATE_API[method]['trading_commission']
+    params = {'product_code': product_code}
+
+    bf = BitflyerAPI(method, process_path, params=params)
+
+    result = bf.get(private=True, name='get_trading_commission')
+
+    result_json = result.json()
+
+    return result_json['commission_rate']
 
 
 def get_child_orders(product_code, count=100, before=0, after=0,

@@ -22,7 +22,13 @@ BALANCE_LOG_DIR = 'balance_log'
 EXECUTION_HISTORY_DIR = 'execute_history'
 
 
-def get_executions_history(product_code, start_date, end_date, region='Asia/Tokyo',  count=500, return_df=False):
+def get_executions_history(
+        product_code,
+        start_date,
+        end_date,
+        region='Asia/Tokyo',
+        count=500,
+        return_df=False):
     logger.debug(
         f'[{start_date} - {end_date}] 取引履歴ダウンロード中...')
 
@@ -55,7 +61,9 @@ def get_executions_history(product_code, start_date, end_date, region='Asia/Toky
 
         p_save_dir = p_save_base_dir.joinpath(
             product_code,
-            end_date_tmp.strftime('%Y'), end_date_tmp.strftime('%m'), end_date_tmp.strftime('%d'))
+            end_date_tmp.strftime('%Y'),
+            end_date_tmp.strftime('%m'),
+            end_date_tmp.strftime('%d'))
 
         p_save_dir_row = p_save_dir.joinpath('row')
         p_save_dir_1h = p_save_dir.joinpath('1h')
@@ -215,8 +223,7 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
     df_buy_size = df_buy[['size']]
     df_buy_price_ohlc = df_buy_price.resample(freq).ohlc()
     df_buy_price_ohlc.columns = [
-        f'{col_name[1]}_{col_name[0]}' for col_name in df_buy_price_ohlc.columns.tolist()
-    ]
+        f'{col_name[1]}_{col_name[0]}' for col_name in df_buy_price_ohlc.columns.tolist()]
     df_buy_size = df_buy_size.resample(freq).sum()
     df_buy_size.columns = ['total_size']
     df_buy_resampled = pd.concat([df_buy_price_ohlc, df_buy_size], axis=1)
@@ -234,8 +241,7 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
 
     df_sell_price_ohlc = df_sell_price.resample(freq).ohlc()
     df_sell_price_ohlc.columns = [
-        f'{col_name[1]}_{col_name[0]}' for col_name in df_sell_price_ohlc.columns.tolist()
-    ]
+        f'{col_name[1]}_{col_name[0]}' for col_name in df_sell_price_ohlc.columns.tolist()]
     df_sell_size = df_sell_size.resample(freq).sum()
     df_sell_size.columns = ['total_size']
     df_sell_resampled = pd.concat([df_sell_price_ohlc, df_sell_size], axis=1)
@@ -305,7 +311,11 @@ def make_summary_from_scratch(p_dir):
     return df_summary
 
 
-def make_summary_from_csv(product_code, p_dir='', summary_path_list=[], save=True):
+def make_summary_from_csv(
+        product_code,
+        p_dir='',
+        summary_path_list=[],
+        save=True):
     if p_dir != '':
         logger.debug(f'[{p_dir}] 集計データ更新中...')
         p_summary_save_path = p_dir.joinpath('summary.csv')
@@ -356,7 +366,7 @@ def make_summary_from_csv(product_code, p_dir='', summary_path_list=[], save=Tru
                     summary_path_list.append(summary_path_tmp)
 
     for summary_path in summary_path_list:
-        if not product_code in summary_path:
+        if product_code not in summary_path:
             logger.warning(
                 f'[{summary_path}] 対象のproduct_codeとは違うパスが含まれているため、読み込み対象外にします。')
             continue
@@ -373,21 +383,32 @@ def make_summary_from_csv(product_code, p_dir='', summary_path_list=[], save=Tru
                 df_summary.at['open_price',
                               'BUY'] = df_summary_child.at['open_price', 'BUY']
                 df_summary.at['open_price',
-                              'SELL'] = df_summary_child.at['open_price', 'SELL']
+                              'SELL'] = df_summary_child.at['open_price',
+                                                            'SELL']
 
-            if df_summary.at['high_price', 'BUY'] < df_summary_child.at['high_price', 'BUY']:
+            if df_summary.at['high_price',
+                             'BUY'] < df_summary_child.at['high_price',
+                                                          'BUY']:
                 df_summary.at['high_price',
                               'BUY'] = df_summary_child.at['high_price', 'BUY']
-            if df_summary.at['high_price', 'SELL'] < df_summary_child.at['high_price', 'SELL']:
+            if df_summary.at['high_price',
+                             'SELL'] < df_summary_child.at['high_price',
+                                                           'SELL']:
                 df_summary.at['high_price',
-                              'SELL'] = df_summary_child.at['high_price', 'SELL']
+                              'SELL'] = df_summary_child.at['high_price',
+                                                            'SELL']
 
-            if df_summary.at['low_price', 'BUY'] > df_summary_child.at['low_price', 'BUY']:
+            if df_summary.at['low_price',
+                             'BUY'] > df_summary_child.at['low_price',
+                                                          'BUY']:
                 df_summary.at['low_price',
                               'BUY'] = df_summary_child.at['low_price', 'BUY']
-            if df_summary.at['low_price', 'SELL'] > df_summary_child.at['low_price', 'SELL']:
+            if df_summary.at['low_price',
+                             'SELL'] > df_summary_child.at['low_price',
+                                                           'SELL']:
                 df_summary.at['low_price',
-                              'SELL'] = df_summary_child.at['low_price', 'SELL']
+                              'SELL'] = df_summary_child.at['low_price',
+                                                            'SELL']
 
             df_summary.at['close_price',
                           'BUY'] = df_summary_child.at['close_price', 'BUY']
@@ -466,12 +487,6 @@ def obtain_latest_summary(product_code):
 
     df_buy_resampled, df_sell_resampled = resampling(
         df_buy[['price', 'size']], df_sell[['price', 'size']], freq='S')
-
-    df_buy_1m = df_buy_resampled.query('index > @before_1m_datetime')
-    df_sell_1m = df_sell_resampled.query('index > @before_1m_datetime')
-
-    df_buy_10m = df_buy_resampled.query('index > @before_10m_datetime')
-    df_sell_10m = df_sell_resampled.query('index > @before_10m_datetime')
 
     df_buy_1h = df_buy_resampled.query('index > @before_1h_datetime')
     df_sell_1h = df_sell_resampled.query('index > @before_1h_datetime')
@@ -602,23 +617,8 @@ def obtain_latest_summary(product_code):
 
     latest_summary = {
         'BUY': {
-            '1min': {
-                'price': {
-                    'open': df_buy_1m['open_price'].values[0],
-                    'high': df_buy_1m['high_price'].max(),
-                    'low': df_buy_1m['low_price'].min(),
-                    'close': df_buy_1m['close_price'].values[-1],
-                },
-                'trend': 'DOWN',
-            },
-            '10min': {
-                'price': {
-                    'open': df_buy_10m['open_price'].values[0],
-                    'high': df_buy_10m['high_price'].max(),
-                    'low': df_buy_10m['low_price'].min(),
-                    'close': df_buy_10m['close_price'].values[-1],
-                },
-                'trend': 'DOWN',
+            'now': {
+                'price': df_buy_1h['close_price'].values[-1],
             },
             '1h': {
                 'price': {
@@ -685,23 +685,8 @@ def obtain_latest_summary(product_code):
             },
         },
         'SELL': {
-            '1min': {
-                'price': {
-                    'open': df_sell_1m['open_price'].values[0],
-                    'high': df_sell_1m['high_price'].max(),
-                    'low': df_sell_1m['low_price'].min(),
-                    'close': df_sell_1m['close_price'].values[-1],
-                },
-                'trend': 'DOWN',
-            },
-            '10min': {
-                'price': {
-                    'open': df_sell_10m['open_price'].values[0],
-                    'high': df_sell_10m['high_price'].max(),
-                    'low': df_sell_10m['low_price'].min(),
-                    'close': df_sell_10m['close_price'].values[-1],
-                },
-                'trend': 'DOWN',
+            'now': {
+                'price': df_sell_1h['close_price'].values[-1],
             },
             '1h': {
                 'price': {
