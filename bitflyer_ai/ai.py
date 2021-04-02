@@ -21,15 +21,14 @@ class AI:
 
     """
 
-    def __init__(
-            self,
-            latest_summary,
-            product_code,
-            min_size_short=0.01,
-            min_size_long=0.1,
-            time_diff=9,
-            region='Asia/Tokyo',
-            bucket_name=''):
+    def __init__(self,
+                 latest_summary,
+                 product_code,
+                 min_size_short=0.01,
+                 min_size_long=0.1,
+                 time_diff=9,
+                 region='Asia/Tokyo',
+                 bucket_name=''):
 
         self.product_code = product_code
 
@@ -56,10 +55,8 @@ class AI:
                     drop=True
                 )
 
-                self.child_orders[term]['child_order_date'] = pd.to_datetime(
-                    self.child_orders[term]['child_order_date'])
-                self.child_orders[term]['child_order_date'] = self.child_orders[term]['child_order_date'].dt.tz_convert(
-                    region)
+                self.child_orders[term]['child_order_date'] = pd.to_datetime(self.child_orders[term]['child_order_date'])
+                self.child_orders[term]['child_order_date'] = self.child_orders[term]['child_order_date'].dt.tz_convert(region)
             elif not REF_LOCAL and s3.key_exists(str(self.p_child_orders_path[term])):
                 self.child_orders[term] = s3.read_csv(
                     str(self.p_child_orders_path[term])
@@ -67,31 +64,26 @@ class AI:
 
                 self.child_orders[term] = self.child_orders[term].set_index(
                     'child_order_acceptance_id',
-                    drop=True
+                    drop=True,
                 )
 
-                self.child_orders[term]['child_order_date'] = pd.to_datetime(
-                    self.child_orders[term]['child_order_date'])
-                self.child_orders[term]['child_order_date'] = self.child_orders[term]['child_order_date'].dt.tz_convert(
-                    region)
+                self.child_orders[term]['child_order_date'] = pd.to_datetime(self.child_orders[term]['child_order_date'])
+                self.child_orders[term]['child_order_date'] = self.child_orders[term]['child_order_date'].dt.tz_convert(region)
 
         self.datetime = datetime.datetime.now(
             datetime.timezone(datetime.timedelta(hours=9))
         )
 
         self.datetime_references = {
-            'now': datetime.datetime.now(
-                datetime.timezone(
-                    datetime.timedelta(
-                        hours=9))), }
-        self.datetime_references['hourly'] = \
-            self.datetime_references['now'] - datetime.timedelta(hours=6)
-        self.datetime_references['daily'] = \
-            self.datetime_references['now'] - datetime.timedelta(days=1)
-        self.datetime_references['weekly'] = \
-            self.datetime_references['now'] - datetime.timedelta(days=7)
-        self.datetime_references['monthly'] = \
-            self.datetime_references['now'] - datetime.timedelta(days=31)
+            'now': datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))),
+        }
+        self.datetime_references['hourly'] = self.datetime_references['now'] - datetime.timedelta(hours=6)
+
+        self.datetime_references['daily'] = self.datetime_references['now'] - datetime.timedelta(days=1)
+
+        self.datetime_references['weekly'] = self.datetime_references['now'] - datetime.timedelta(days=7)
+
+        self.datetime_references['monthly'] = self.datetime_references['now'] - datetime.timedelta(days=31)
 
         self.min_size = {
             'long': min_size_long,
@@ -117,13 +109,13 @@ class AI:
                 str(self.p_child_orders_path[term]),
                 df=self.child_orders[term]
             )
+        logger.debug(f'{str(self.p_child_orders_path[term])} が更新されました。')
 
-    def load_latest_child_orders(
-            self,
-            term,
-            child_order_cycle,
-            child_order_acceptance_id,
-            related_child_order_acceptance_id='no_id'):
+    def load_latest_child_orders(self,
+                                 term,
+                                 child_order_cycle,
+                                 child_order_acceptance_id,
+                                 related_child_order_acceptance_id='no_id'):
         logger.debug(f'child_order_acceptance_id: {child_order_acceptance_id}')
         # get a child order from api
         child_orders_tmp = pd.DataFrame()
@@ -135,65 +127,62 @@ class AI:
                 child_order_acceptance_id=child_order_acceptance_id
             )
             if time.time() - start_time > 5:
-                logger.warning(
-                    f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
+                logger.warning(f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
                 self.delte_order(
                     term=term,
                     child_order_acceptance_id=child_order_acceptance_id
                 )
-                break
-        if not child_orders_tmp.empty:
-            child_orders_tmp['child_order_cycle'] = child_order_cycle
-            child_orders_tmp['related_child_order_acceptance_id'] = related_child_order_acceptance_id
-            child_orders_tmp['total_commission_yen'] = 0
-            child_orders_tmp['profit'] = 0
+                return
 
-            if self.child_orders[term].empty:
-                self.child_orders[term] = child_orders_tmp
-            else:
-                self.child_orders[term].loc[child_order_acceptance_id] = child_orders_tmp.loc[child_order_acceptance_id]
+        child_orders_tmp['child_order_cycle'] = child_order_cycle
+        child_orders_tmp['related_child_order_acceptance_id'] = related_child_order_acceptance_id
+        child_orders_tmp['total_commission_yen'] = 0
+        child_orders_tmp['profit'] = 0
 
-            if self.child_orders[term].at[child_order_acceptance_id,
-                                          'child_order_state'] == 'COMPLETED':
-                # 取引手数料を算出
-                total_commission = self.child_orders[term].at[child_order_acceptance_id,
-                                                              'total_commission']
-                price = self.child_orders[term].at[child_order_acceptance_id, 'price']
-                self.child_orders[term].at[child_order_acceptance_id,
-                                           'total_commission_yen'] = price * total_commission
+        if self.child_orders[term].empty:
+            self.child_orders[term] = child_orders_tmp
+        else:
+            self.child_orders[term].loc[child_order_acceptance_id] = child_orders_tmp.loc[child_order_acceptance_id]
 
-                if self.child_orders[term].at[child_order_acceptance_id, 'related_child_order_acceptance_id'] == 'no_id' \
-                        or self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
-                    logger.info(
-                        f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
-                    )
+        if self.child_orders[term].at[child_order_acceptance_id,
+                                      'child_order_state'] == 'COMPLETED':
+            # 取引手数料を算出
+            total_commission = self.child_orders[term].at[child_order_acceptance_id,
+                                                          'total_commission']
+            price = self.child_orders[term].at[child_order_acceptance_id, 'price']
+            self.child_orders[term].at[child_order_acceptance_id,
+                                       'total_commission_yen'] = price * total_commission
 
-                if self.child_orders[term].at[child_order_acceptance_id,
-                                              'side'] == 'SELL':
-                    sell_price = self.child_orders[term].at[child_order_acceptance_id, 'price']
-                    sell_size = self.child_orders[term].at[child_order_acceptance_id, 'size']
-                    sell_commission = self.child_orders[term].at[child_order_acceptance_id,
-                                                                 'total_commission_yen']
+            if self.child_orders[term].at[child_order_acceptance_id, 'related_child_order_acceptance_id'] == 'no_id' \
+                    or self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
+                logger.info(
+                    f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
+                )
 
-                    buy_price = self.child_orders[term].at[related_child_order_acceptance_id, 'price']
-                    buy_size = self.child_orders[term].at[related_child_order_acceptance_id, 'size']
-                    buy_commission = self.child_orders[term].at[related_child_order_acceptance_id,
-                                                                'total_commission_yen']
+            if self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
+                sell_price = self.child_orders[term].at[child_order_acceptance_id, 'price']
+                sell_size = self.child_orders[term].at[child_order_acceptance_id, 'size']
+                sell_commission = self.child_orders[term].at[child_order_acceptance_id,
+                                                             'total_commission_yen']
 
-                    profit = sell_price * sell_size - buy_price * buy_size
-                    profit -= sell_commission + buy_commission
+                buy_price = self.child_orders[term].at[related_child_order_acceptance_id, 'price']
+                buy_size = self.child_orders[term].at[related_child_order_acceptance_id, 'size']
+                buy_commission = self.child_orders[term].at[related_child_order_acceptance_id,
+                                                            'total_commission_yen']
 
-                    logger.info(
-                        f'{profit}円の利益が発生しました。'
-                    )
-                    self.child_orders[term].at[child_order_acceptance_id,
-                                               'profit'] = profit
-                    self.child_orders[term]['cumsum_profit'] = self.child_orders[term]['profit'].cumsum(
-                    )
+                profit = sell_price * sell_size - buy_price * buy_size
+                profit -= sell_commission + buy_commission
+
+                logger.info(f'{profit}円の利益が発生しました。')
+
+                self.child_orders[term].at[child_order_acceptance_id, 'profit'] = profit
+                self.child_orders[term]['cumsum_profit'] = self.child_orders[term]['profit'].cumsum()
 
         # csvファイルを更新
         if REF_LOCAL:
-            self.child_orders[term].to_csv(str(self.p_child_orders_path[term]))
+            self.child_orders[term].to_csv(
+                str(self.p_child_orders_path[term])
+            )
         else:
             s3.to_csv(
                 str(self.p_child_orders_path[term]),
@@ -202,7 +191,8 @@ class AI:
 
         logger.debug(f'{str(self.p_child_orders_path[term])} が更新されました。')
 
-    def update_child_orders(self, term,
+    def update_child_orders(self,
+                            term,
                             child_order_acceptance_id="",
                             child_order_cycle="",
                             related_child_order_acceptance_id="no_id"):
@@ -210,8 +200,7 @@ class AI:
         # --------------------------------
         # 既存の注文における約定状態を更新
         # --------------------------------
-        for child_order_acceptance_id_tmp in self.child_orders[term].index.tolist(
-        ):
+        for child_order_acceptance_id_tmp in self.child_orders[term].index.tolist():
             if self.child_orders[term].at[child_order_acceptance_id_tmp,
                                           'child_order_state'] == 'ACTIVE':
                 self.load_latest_child_orders(
@@ -232,25 +221,27 @@ class AI:
                 term=term,
                 child_order_cycle=child_order_cycle,
                 child_order_acceptance_id=child_order_acceptance_id,
-                related_child_order_acceptance_id=related_child_order_acceptance_id)
+                related_child_order_acceptance_id=related_child_order_acceptance_id
+            )
 
-    def cancel(
-            self,
-            term,
-            child_order_cycle,
-            child_order_acceptance_id,
-            child_order_type='buy'):
+    def cancel(self,
+               term,
+               child_order_cycle,
+               child_order_acceptance_id,
+               child_order_type='buy'):
         # ----------------------------------------------------------------
         # キャンセル処理
         # ----------------------------------------------------------------
         response = cancel_child_order(
             product_code=self.product_code,
-            child_order_acceptance_id=child_order_acceptance_id)
+            child_order_acceptance_id=child_order_acceptance_id
+        )
         if response.status_code == 200:
             self.delte_order(term, child_order_acceptance_id)
             print('================================================================')
             logger.info(
-                f'[{term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。')
+                f'[{term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。'
+            )
             print('================================================================')
         else:
             response_json = response.json()
@@ -273,11 +264,13 @@ class AI:
         price = int(local_prices['low'] * price_rate)
         if price >= global_prices['high'] * self.max_buy_prices_rate[term]:
             logger.info(
-                f'[{term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。')
+                f'[{term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。'
+            )
             return
 
-        size_rate = 32 * (self.max_buy_prices_rate[term] -
-                          price / global_prices['high']) ** 2 + 1
+        size_rate = 32 * \
+            (self.max_buy_prices_rate[term]
+             - price / global_prices['high']) ** 2 + 1
 
         size = self.min_size[term] * size_rate
 
@@ -288,13 +281,17 @@ class AI:
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
             target_buy_history = self.child_orders[term].query(
-                'side == "BUY" and child_order_date > @target_datetime and child_order_cycle == @child_order_cycle')
+                'side == "BUY" and child_order_date > @target_datetime and child_order_cycle == @child_order_cycle'
+            )
             target_buy_history_active = target_buy_history.query(
-                'child_order_state == "ACTIVE"')
+                'child_order_state == "ACTIVE"'
+            )
             target_buy_history_completed = target_buy_history.query(
-                'child_order_state == "COMPLETED"')
+                'child_order_state == "COMPLETED"'
+            )
             same_category_order = self.child_orders[term].query(
-                'side == "BUY" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle').copy()
+                'side == "BUY" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle'
+            ).copy()
 
         if not same_category_order.empty:
             logger.info(
@@ -315,7 +312,8 @@ class AI:
             if not same_category_order.empty:
                 if len(same_category_order) >= 2:
                     logger.error(
-                        f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。')
+                        f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。'
+                    )
                 logger.info(
                     f'[{term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、前回の注文をキャンセルし、新規の買い注文を行います。'
                 )
@@ -333,25 +331,29 @@ class AI:
             # 買い注文
             # ----------------------------------------------------------------
 
-            response = send_child_order(self.product_code, 'LIMIT', 'BUY',
-                                        price=price, size=size)
+            response = send_child_order(
+                self.product_code, 'LIMIT', 'BUY', price=price, size=size
+            )
             response_json = response.json()
             if response.status_code == 200:
                 print('================================================================')
                 logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!')
+                    f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!'
+                )
                 print('================================================================')
                 self.update_child_orders(
                     term=term,
                     child_order_acceptance_id=response_json['child_order_acceptance_id'],
-                    child_order_cycle=child_order_cycle)
+                    child_order_cycle=child_order_cycle,
+                )
 
     def sell(self, term, child_order_cycle, rate):
         related_buy_order = self.child_orders[term].query(
             'side=="BUY" and child_order_state == "COMPLETED" and child_order_cycle == @child_order_cycle and related_child_order_acceptance_id == "no_id"').copy()
         if related_buy_order.empty:
             logger.info(
-                f'[{term}, {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。')
+                f'[{term}, {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。'
+            )
         else:
             if len(related_buy_order) >= 2:
                 logger.warning(
@@ -366,12 +368,11 @@ class AI:
                                             price=price, size=size)
                 if response.status_code == 200:
                     response_json = response.json()
-                    print(
-                        '================================================================')
+                    print('================================================================')
                     logger.info(
-                        f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} {int(int(related_buy_order["price"].values[i]) * (rate-1)) * size}] 売り注文に成功しました！！')
-                    print(
-                        '================================================================')
+                        f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} {int(int(related_buy_order["price"].values[i]) * (rate-1)) * size}] 売り注文に成功しました！！'
+                    )
+                    print('================================================================')
 
                     self.update_child_orders(
                         term=term,
@@ -383,23 +384,25 @@ class AI:
                         term=term,
                         child_order_cycle=child_order_cycle,
                         related_child_order_acceptance_id=response_json['child_order_acceptance_id'],
-                        child_order_acceptance_id=related_buy_order.index[i])
+                        child_order_acceptance_id=related_buy_order.index[i],
+                    )
 
     def update_long_term_profit(self):
         if not self.child_orders['long'].empty:
-            self.child_orders['long']['profit'] = self.child_orders['long']['size'] * (
-                self.latest_summary['BUY']['now']['price'] - self.child_orders['long']['price']) - self.child_orders['long']['total_commission_yen']
+            self.child_orders['long']['profit'] = self.child_orders['long']['size'] \
+                * (self.latest_summary['BUY']['now']['price'] - self.child_orders['long']['price']) \
+                - self.child_orders['long']['total_commission_yen']
 
-            self.child_orders['long'].loc[self.child_orders['long'][
-                'child_order_state'] == 'ACTIVE', 'profit'] = 0
+            self.child_orders['long'].loc[self.child_orders['long']
+                                          ['child_order_state'] == 'ACTIVE', 'profit'] = 0
 
-            self.child_orders['long']['cumsum_profit'] = self.child_orders['long']['profit'].cumsum(
-            )
+            self.child_orders['long']['cumsum_profit'] = self.child_orders['long']['profit'].cumsum()
 
             # csvファイルを更新
             if REF_LOCAL:
                 self.child_orders['long'].to_csv(
-                    str(self.p_child_orders_path['long']))
+                    str(self.p_child_orders_path['long'])
+                )
             else:
                 s3.to_csv(
                     str(self.p_child_orders_path['long']),

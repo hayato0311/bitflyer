@@ -199,12 +199,11 @@ def get_ticker(product_code):
     return result
 
 
-def get_executions(
-        product_code,
-        count=100,
-        before=0,
-        after=0,
-        region='Asia/Tokyo'):
+def get_executions(product_code,
+                   count=100,
+                   before=0,
+                   after=0,
+                   region='Asia/Tokyo'):
     """約定履歴を取得
 
     Args:
@@ -273,10 +272,15 @@ def get_trading_commission(product_code):
     return result_json['commission_rate']
 
 
-def get_child_orders(product_code, count=100, before=0, after=0,
+def get_child_orders(product_code,
+                     count=100,
+                     before=0,
+                     after=0,
                      child_order_state='',
-                     child_order_id='', child_order_acceptance_id='',
-                     parent_order_id='', region='Asia/Tokyo'):
+                     child_order_id='',
+                     child_order_acceptance_id='',
+                     parent_order_id='',
+                     region='Asia/Tokyo'):
 
     method = 'GET'
     process_path = HTTP_PRIVATE_API[method]['child_orders']
@@ -316,8 +320,13 @@ def get_child_orders(product_code, count=100, before=0, after=0,
     return df
 
 
-def send_child_order(product_code, child_order_type, side, price, size,
-                     minute_to_expire=43200, time_in_force='GTC'):
+def send_child_order(product_code,
+                     child_order_type,
+                     side,
+                     price,
+                     size,
+                     minute_to_expire=43200,
+                     time_in_force='GTC'):
     """新規注文を出す
     Args:
         product_code (str): 注文するプロダクト。BTC_JPY, ETH_BTC, BCH_BTC, ETH_JPYが利用可能
@@ -351,7 +360,8 @@ def send_child_order(product_code, child_order_type, side, price, size,
     return result
 
 
-def cancel_child_order(product_code, child_order_acceptance_id):
+def cancel_child_order(product_code,
+                       child_order_acceptance_id):
     """注文をキャンセルする
     Args:
         product_code (str): 注文するプロダクト。BTC_JPY, ETH_BTC, BCH_BTC, ETH_JPYが利用可能
