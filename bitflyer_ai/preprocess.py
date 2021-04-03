@@ -6,20 +6,21 @@ from pathlib import Path
 from pprint import pprint
 from logging import getLogger
 import os
+from dateutil.relativedelta import relativedelta
 
 from bitflyer_api import *
 from ai import *
-from manage import REF_LOCAL, BUCKET_NAME
+from manage import REF_LOCAL, BALANCE_LOG_DIR, EXECUTION_HISTORY_DIR
+
+from utils import path_exists, read_csv, df_to_csv
 
 
 logger = getLogger(__name__)
 
 if not REF_LOCAL:
+    from manage import BUCKET_NAME
     from aws import S3
     s3 = S3()
-
-BALANCE_LOG_DIR = 'balance_log'
-EXECUTION_HISTORY_DIR = 'execute_history'
 
 
 def get_executions_history(
@@ -86,45 +87,33 @@ def get_executions_history(
 
         before = 0
         after = 0
-        if REF_LOCAL:
-            if p_save_path_row_all.exists():
-                df = pd.read_csv(str(p_save_path_row_all))
-
-                df['exec_date'] = pd.to_datetime(df['exec_date'])
-                df = df.set_index('exec_date')
-                df = df.tz_convert(region)
-
-                before = int(df.head(1)['id'])
-                after = int(df.tail(1)['id'])
-
-            else:
-                df = get_executions(product_code, count,
-                                    before=before, region=region)
-                if df.empty:
-                    df = get_executions(product_code, count,
-                                        after=after, region=region)
-                df = df.sort_index()
-                before = int(df.head(1)['id'])
-                after = int(df.tail(1)['id'])
+        if path_exists(p_save_path_row_all):
+            df = read_csv(str(p_save_path_row_all))
+            df['exec_date'] = pd.to_datetime(df['exec_date'])
+            df = df.set_index('exec_date')
+            df = df.tz_convert(region)
+            before = int(df.head(1)['id'])
+            after = int(df.tail(1)['id'])
         else:
-
-            if s3.key_exists(str(p_save_path_row_all)):
-                df = s3.read_csv(str(p_save_path_row_all))
-                df['exec_date'] = pd.to_datetime(df['exec_date'])
-                df = df.set_index('exec_date')
-                df = df.tz_convert(region)
-
-                before = int(df.head(1)['id'])
-                after = int(df.tail(1)['id'])
-            else:
+            df = get_executions(product_code, count,
+                                before=before, region=region)
+            if df.empty:
                 df = get_executions(product_code, count,
-                                    before=before, region=region)
-                if df.empty:
-                    df = get_executions(product_code, count,
-                                        after=after, region=region)
-                df = df.sort_index()
-                before = int(df.head(1)['id'])
-                after = int(df.tail(1)['id'])
+                                    after=after, region=region)
+            df = df.sort_index()
+            before = int(df.head(1)['id'])
+            after = int(df.tail(1)['id'])
+
+        while df.tail(1).index[0] < target_date_end:
+            df_new = get_executions(product_code, count, after=after)
+            if df_new.empty:
+                break
+            df_new = df_new.tz_convert(region)
+            df = pd.concat([df, df_new])
+            df = df.sort_index()
+            after = int(df.tail(1)['id'])
+            if REF_LOCAL:
+                time.sleep(0.25)
 
         while target_date_start < df.head(1).index[0]:
             df_new = get_executions(product_code, count, before=before)
@@ -160,25 +149,28 @@ def get_executions_history(
             df_buy = df.query('side == "BUY"')
             df_sell = df.query('side == "SELL"')
 
-            if REF_LOCAL:
-                df.to_csv(str(p_save_path_row_all))
-                df_buy.to_csv(str(p_save_path_row_buy))
-                df_sell.to_csv(str(p_save_path_row_sell))
-            else:
-                logger.debug(f'[{target_date_start}] 取引履歴データ保存中...')
-                s3.to_csv(
-                    str(p_save_path_row_all),
-                    df=df
-                )
-                s3.to_csv(
-                    str(p_save_path_row_buy),
-                    df=df_buy
-                )
-                s3.to_csv(
-                    str(p_save_path_row_sell),
-                    df=df_sell
-                )
-                logger.debug(f'[{target_date_start}] 取引履歴データ保存完了')
+            # if REF_LOCAL:
+            #     df.to_csv(str(p_save_path_row_all))
+            #     df_buy.to_csv(str(p_save_path_row_buy))
+            #     df_sell.to_csv(str(p_save_path_row_sell))
+            # else:
+            logger.debug(f'[{target_date_start}] 取引履歴データ保存中...')
+            df_to_csv(str(p_save_path_row_all), df, index=True)
+            df_to_csv(str(p_save_path_row_buy), df_buy, index=True)
+            df_to_csv(str(p_save_path_row_sell), df_sell, index=True)
+            logger.debug(f'[{target_date_start}] 取引履歴データ保存完了')
+            # s3.to_csv(
+            #     str(p_save_path_row_all),
+            #     df=df
+            # )
+            # s3.to_csv(
+            #     str(p_save_path_row_buy),
+            #     df=df_buy
+            # )
+            # s3.to_csv(
+            #     str(p_save_path_row_sell),
+            #     df=df_sell
+            # )
 
             p_save_dir_1h = p_save_dir.joinpath('1h')
             p_save_dir_1m = p_save_dir.joinpath('1m')
@@ -224,17 +216,21 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
     df_buy_price_ohlc = df_buy_price.resample(freq).ohlc()
     df_buy_price_ohlc.columns = [
         f'{col_name[1]}_{col_name[0]}' for col_name in df_buy_price_ohlc.columns.tolist()]
+    df_buy_price_ohlc.interpolate()
+    df_buy_price_ohlc.dropna(how='any')
+
     df_buy_size = df_buy_size.resample(freq).sum()
     df_buy_size.columns = ['total_size']
     df_buy_resampled = pd.concat([df_buy_price_ohlc, df_buy_size], axis=1)
     if not p_save_dir == '':
-        if REF_LOCAL:
-            df_buy_resampled.to_csv(str(p_save_dir.joinpath('buy.csv')))
-        else:
-            s3.to_csv(
-                str(p_save_dir.joinpath('buy.csv')),
-                df=df_buy_resampled
-            )
+        # if REF_LOCAL:
+        #     df_buy_resampled.to_csv(str(p_save_dir.joinpath('buy.csv')))
+        # else:
+        # s3.to_csv(
+        #     str(p_save_dir.joinpath('buy.csv')),
+        #     df=df_buy_resampled
+        # )
+        df_to_csv(str(p_save_dir.joinpath('buy.csv')), df_buy_resampled, index=True)
 
     df_sell_price = df_sell[['price']]
     df_sell_size = df_sell[['size']]
@@ -246,13 +242,14 @@ def resampling(df_buy, df_sell, p_save_dir='', freq='T'):
     df_sell_size.columns = ['total_size']
     df_sell_resampled = pd.concat([df_sell_price_ohlc, df_sell_size], axis=1)
     if not p_save_dir == '':
-        if REF_LOCAL:
-            df_sell_resampled.to_csv(str(p_save_dir.joinpath('sell.csv')))
-        else:
-            s3.to_csv(
-                str(p_save_dir.joinpath('sell.csv')),
-                df=df_sell_resampled
-            )
+        # if REF_LOCAL:
+        #     df_sell_resampled.to_csv(str(p_save_dir.joinpath('sell.csv')))
+        # else:
+        #     s3.to_csv(
+        #         str(p_save_dir.joinpath('sell.csv')),
+        #         df=df_sell_resampled
+        #     )
+        df_to_csv(str(p_save_dir.joinpath('sell.csv')), df_sell_resampled, index=True)
     return df_buy_resampled, df_sell_resampled
 
 
@@ -262,12 +259,21 @@ def make_summary_from_scratch(p_dir):
     p_sell_path = p_dir.joinpath('sell.csv')
     p_summary_path = p_dir.parent.joinpath('summary.csv')
 
-    if REF_LOCAL:
-        df_buy = pd.read_csv(str(p_buy_path))
-        df_sell = pd.read_csv(str(p_sell_path))
-    else:
-        df_buy = s3.read_csv(str(p_buy_path))
-        df_sell = s3.read_csv(str(p_sell_path))
+    df_buy = pd.DataFrame()
+    df_sell = pd.DataFrame()
+
+    # if REF_LOCAL:
+    #     if p_buy_path.exists() and p_sell_path.exists():
+    #         df_buy = pd.read_csv(str(p_buy_path))
+    #         df_sell = pd.read_csv(str(p_sell_path))
+    # else:
+    if path_exists(p_buy_path) and path_exists(p_sell_path):
+        df_buy = read_csv(str(p_buy_path))
+        df_sell = read_csv(str(p_sell_path))
+
+    if df_buy.empty or df_sell.empty:
+        logger.debug(f'[{p_dir}] データが存在しなかったため集計データ作成を中断します。')
+        return pd.DataFrame()
 
     df_summary = pd.DataFrame(
         [
@@ -299,14 +305,15 @@ def make_summary_from_scratch(p_dir):
         ]
     )
 
-    if REF_LOCAL:
-        df_summary.to_csv(str(p_summary_path), index=False)
-    else:
-        s3.to_csv(
-            str(p_summary_path),
-            df=df_summary,
-            index=False
-        )
+    # if REF_LOCAL:
+    #     df_summary.to_csv(str(p_summary_path), index=False)
+    # else:
+    #     s3.to_csv(
+    #         str(p_summary_path),
+    #         df=df_summary,
+    #         index=False
+    #     )
+    df_to_csv(str(p_summary_path), df_summary, index=False)
     logger.debug(f'[{p_dir}] 集計データ作成完了')
     return df_summary
 
@@ -334,14 +341,17 @@ def make_summary_from_csv(
             )
     df_summary = pd.DataFrame()
     if p_dir != '':
-        if REF_LOCAL:
-            if p_summary_save_path.exists():
-                df_summary = s3.read_csv(str(p_summary_save_path))
-                df_summary = df_summary.set_index('CATEGORY', drop=True)
-        else:
-            if s3.key_exists(str(p_summary_save_path)):
-                df_summary = s3.read_csv(str(p_summary_save_path))
-                df_summary = df_summary.set_index('CATEGORY', drop=True)
+        # if REF_LOCAL:
+        #     if p_summary_save_path.exists():
+        #         df_summary = s3.read_csv(str(p_summary_save_path))
+        #         df_summary = df_summary.set_index('CATEGORY', drop=True)
+        # else:
+        #     if s3.key_exists(str(p_summary_save_path)):
+        #         df_summary = s3.read_csv(str(p_summary_save_path))
+        #         df_summary = df_summary.set_index('CATEGORY', drop=True)
+        if path_exists(p_summary_save_path):
+            df_summary = read_csv(str(p_summary_save_path))
+            df_summary = df_summary.set_index('CATEGORY', drop=True)
     if summary_path_list == [] and p_dir != '':
         if REF_LOCAL:
             p_summary_path_list = p_dir.glob('*/summary.csv')
@@ -362,7 +372,7 @@ def make_summary_from_csv(
                 target_day_dir_list = day_dir_list[-2:]
             for day_dir in target_day_dir_list:
                 summary_path_tmp = day_dir + 'summary.csv'
-                if s3.key_exists(summary_path_tmp):
+                if path_exists(summary_path_tmp):
                     summary_path_list.append(summary_path_tmp)
 
     for summary_path in summary_path_list:
@@ -370,11 +380,8 @@ def make_summary_from_csv(
             logger.warning(
                 f'[{summary_path}] 対象のproduct_codeとは違うパスが含まれているため、読み込み対象外にします。')
             continue
-        if REF_LOCAL:
-            df_summary_child = pd.read_csv(summary_path)
-        else:
-            df_summary_child = s3.read_csv(summary_path)
 
+        df_summary_child = read_csv(summary_path)
         df_summary_child = df_summary_child.set_index('CATEGORY', drop=True)
         if df_summary.empty:
             df_summary = df_summary_child.copy()
@@ -416,13 +423,14 @@ def make_summary_from_csv(
                           'SELL'] = df_summary_child.at['close_price', 'SELL']
 
     if save and p_dir != '':
-        if REF_LOCAL:
-            df_summary.to_csv(str(p_summary_save_path))
-        else:
-            s3.to_csv(
-                str(p_summary_save_path),
-                df=df_summary,
-            )
+        # if REF_LOCAL:
+        #     df_summary.to_csv(str(p_summary_save_path))
+        # else:
+        #     s3.to_csv(
+        #         str(p_summary_save_path),
+        #         df=df_summary,
+        #     )
+        df_to_csv(str(p_summary_save_path), df_summary)
 
     if p_dir != '':
         logger.debug(f'[{p_dir}] 集計データ更新完了')
@@ -441,14 +449,15 @@ def make_summary_from_csv(
 def make_summary(product_code, p_dir, daily=False):
     if daily:
         p_1m_dir = p_dir.joinpath('1m')
-        make_summary_from_scratch(p_1m_dir)
+        df_summary = make_summary_from_scratch(p_1m_dir)
     else:
-        make_summary_from_csv(
+        df_summary = make_summary_from_csv(
             product_code=product_code,
             p_dir=p_dir,
             summary_path_list=[],
             save=True
         )
+    return not df_summary.empty
 
 
 # def estimate_trends(latest_summary):
@@ -464,14 +473,15 @@ def obtain_latest_summary(product_code):
     # daily summary
     current_datetime = datetime.datetime.now(
         datetime.timezone(datetime.timedelta(hours=9)))
-    before_1m_datetime = current_datetime - datetime.timedelta(minutes=1)
-    before_10m_datetime = current_datetime - datetime.timedelta(minutes=10)
     before_1h_datetime = current_datetime - datetime.timedelta(hours=1)
     before_6h_datetime = current_datetime - datetime.timedelta(hours=6)
     before_1d_datetime = current_datetime - datetime.timedelta(days=1)
     before_2d_datetime = current_datetime - datetime.timedelta(days=2)
     before_7d_datetime = current_datetime - datetime.timedelta(days=7)
     before_32d_datetime = current_datetime - datetime.timedelta(days=32)
+    before_1m_datetime = current_datetime + relativedelta(months=-1)
+    before_1y_datetime = current_datetime + relativedelta(years=-1)
+
     df = get_executions_history(
         product_code=product_code,
         start_date=before_1d_datetime,
@@ -499,6 +509,13 @@ def obtain_latest_summary(product_code):
 
     gen_execution_summaries(
         product_code=product_code,
+        year=before_1d_datetime.strftime('%Y'),
+        month=before_1d_datetime.strftime('%m'),
+        day=before_1d_datetime.strftime('%d')
+    )
+
+    gen_execution_summaries(
+        product_code=product_code,
         year=current_datetime.strftime('%Y'),
         month=current_datetime.strftime('%m'),
         day=current_datetime.strftime('%d')
@@ -522,22 +539,17 @@ def obtain_latest_summary(product_code):
 
     target_monthly_summary_path_list = []
     for p_target_monthly_summary_path in p_target_monthly_summary_path_list:
-        if REF_LOCAL:
-            if p_target_monthly_summary_path.exists():
-                target_monthly_summary_path_list.append(
-                    str(p_target_monthly_summary_path)
-                )
-        else:
-            if s3.key_exists(str(p_target_monthly_summary_path)):
-                target_monthly_summary_path_list.append(
-                    str(p_target_monthly_summary_path)
-                )
+        if path_exists(p_target_monthly_summary_path):
+            target_monthly_summary_path_list.append(
+                str(p_target_monthly_summary_path)
+            )
     df_monthly_summary = make_summary_from_csv(
         product_code=product_code,
         p_dir='',
         summary_path_list=target_monthly_summary_path_list,
         save=False
     )
+
     # weekly summary
     target_weekly_summary_path_list = []
     for i in range(8):
@@ -552,17 +564,10 @@ def obtain_latest_summary(product_code):
             target_datetime.strftime('%d'),
             'summary.csv'
         )
-        if REF_LOCAL:
-            if p_target_weekly_summary_path.exists():
-                target_weekly_summary_path_list.append(
-                    str(p_target_weekly_summary_path)
-                )
-        else:
-            if s3.key_exists(str(p_target_weekly_summary_path)):
-                target_weekly_summary_path_list.append(
-                    str(p_target_weekly_summary_path)
-                )
-
+        if path_exists(p_target_weekly_summary_path):
+            target_weekly_summary_path_list.append(
+                str(p_target_weekly_summary_path)
+            )
     df_weekly_summary = make_summary_from_csv(
         product_code=product_code,
         p_dir='',
@@ -590,16 +595,10 @@ def obtain_latest_summary(product_code):
     ]
     target_yearly_summary_path_list = []
     for p_target_yearly_summary_path in p_target_yearly_summary_path_list:
-        if REF_LOCAL:
-            if p_target_yearly_summary_path.exists():
-                target_yearly_summary_path_list.append(
-                    str(p_target_yearly_summary_path)
-                )
-        else:
-            if s3.key_exists(str(p_target_yearly_summary_path)):
-                target_yearly_summary_path_list.append(
-                    str(p_target_yearly_summary_path)
-                )
+        if path_exists(p_target_yearly_summary_path):
+            target_yearly_summary_path_list.append(
+                str(p_target_yearly_summary_path)
+            )
 
     df_yearly_summary = make_summary_from_csv(
         product_code=product_code,
@@ -608,10 +607,7 @@ def obtain_latest_summary(product_code):
         save=False
     )
 
-    if REF_LOCAL:
-        df_all_summary = pd.read_csv(str(p_all_summary_path))
-    else:
-        df_all_summary = s3.read_csv(str(p_all_summary_path))
+    df_all_summary = read_csv(str(p_all_summary_path))
 
     df_all_summary = df_all_summary.set_index('CATEGORY', drop=True)
 
@@ -753,6 +749,84 @@ def obtain_latest_summary(product_code):
             },
         }
     }
+
+    # load summaries
+    p_yesterday_summary_path = p_exe_history_dir.joinpath(
+        product_code,
+        before_1d_datetime.strftime('%Y'),
+        before_1d_datetime.strftime('%m'),
+        before_1d_datetime.strftime('%d'),
+        'summary.csv'
+    )
+    p_last_month_summary_path = p_exe_history_dir.joinpath(
+        product_code,
+        before_1m_datetime.strftime('%Y'),
+        before_1m_datetime.strftime('%m'),
+        'summary.csv'
+    )
+    p_last_year_summary_path = p_exe_history_dir.joinpath(
+        product_code,
+        before_1y_datetime.strftime('%Y'),
+        'summary.csv'
+    )
+    df_yesterday_summary = pd.DataFrame()
+    df_last_month_summary = pd.DataFrame()
+    df_last_year_summary = pd.DataFrame()
+
+    if path_exists(p_yesterday_summary_path):
+        df_yesterday_summary = read_csv(str(p_yesterday_summary_path))
+        df_yesterday_summary = df_yesterday_summary.set_index('CATEGORY')
+
+    if path_exists(p_last_month_summary_path):
+        df_last_month_summary = read_csv(str(p_last_month_summary_path))
+        df_last_month_summary = df_last_month_summary.set_index('CATEGORY')
+
+    if path_exists(p_last_year_summary_path):
+        df_last_year_summary = read_csv(str(p_last_year_summary_path))
+        df_last_year_summary = df_last_year_summary.set_index('CATEGORY')
+
+    if not df_yesterday_summary.empty:
+        latest_summary['BUY']['yesterday'] = {
+            'open': df_yesterday_summary.at['open_price', 'BUY'],
+            'high': df_yesterday_summary.at['high_price', 'BUY'],
+            'low': df_yesterday_summary.at['low_price', 'BUY'],
+            'close': df_yesterday_summary.at['close_price', 'BUY'],
+        }
+        latest_summary['SELL']['yesterday'] = {
+            'open': df_yesterday_summary.at['open_price', 'SELL'],
+            'high': df_yesterday_summary.at['high_price', 'SELL'],
+            'low': df_yesterday_summary.at['low_price', 'SELL'],
+            'close': df_yesterday_summary.at['close_price', 'SELL'],
+        }
+
+    if not df_last_month_summary.empty:
+        latest_summary['BUY']['last_month'] = {
+            'open': df_last_month_summary.at['open_price', 'BUY'],
+            'high': df_last_month_summary.at['high_price', 'BUY'],
+            'low': df_last_month_summary.at['low_price', 'BUY'],
+            'close': df_last_month_summary.at['close_price', 'BUY'],
+        }
+        latest_summary['SELL']['last_month'] = {
+            'open': df_last_month_summary.at['open_price', 'SELL'],
+            'high': df_last_month_summary.at['high_price', 'SELL'],
+            'low': df_last_month_summary.at['low_price', 'SELL'],
+            'close': df_last_month_summary.at['close_price', 'SELL'],
+        }
+
+    if not df_last_year_summary.empty:
+        latest_summary['BUY']['last_year'] = {
+            'open': df_last_year_summary.at['open_price', 'BUY'],
+            'high': df_last_year_summary.at['high_price', 'BUY'],
+            'low': df_last_year_summary.at['low_price', 'BUY'],
+            'close': df_last_year_summary.at['close_price', 'BUY'],
+        }
+        latest_summary['SELL']['last_year'] = {
+            'open': df_last_year_summary.at['open_price', 'SELL'],
+            'high': df_last_year_summary.at['high_price', 'SELL'],
+            'low': df_last_year_summary.at['low_price', 'SELL'],
+            'close': df_last_year_summary.at['close_price', 'SELL'],
+        }
+
     logger.debug(f'[{product_code}] AI用集計データ取得完了')
 
     return latest_summary
@@ -774,10 +848,16 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                         if p_target_day_dir.is_dir():
                             p_day_dir = p_month_dir.joinpath(
                                 str(p_target_day_dir.name))
-                            make_summary(product_code, p_day_dir, daily=True)
+                            success = make_summary(product_code, p_day_dir, daily=True)
+                            if not success:
+                                logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                                return
                 else:
                     p_day_dir = p_month_dir.joinpath(str(day))
-                    make_summary(product_code, p_day_dir, daily=True)
+                    success = make_summary(product_code, p_day_dir, daily=True)
+                    if not success:
+                        logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                        return
                 make_summary(product_code, p_month_dir)
         else:
             target_month_dir_list = s3.listdir(str(p_year_dir))
@@ -798,10 +878,16 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                             p_day_dir = p_month_dir.joinpath(
                                 dir_list[-1]
                             )
-                            make_summary(product_code, p_day_dir, daily=True)
+                            success = make_summary(product_code, p_day_dir, daily=True)
+                            if not success:
+                                logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                                return
                 else:
                     p_day_dir = p_month_dir.joinpath(str(day))
-                    make_summary(product_code, p_day_dir, daily=True)
+                    success = make_summary(product_code, p_day_dir, daily=True)
+                    if not success:
+                        logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                        return
                 make_summary(product_code, p_month_dir)
 
     else:
@@ -813,7 +899,10 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                         p_day_dir = p_month_dir.joinpath(
                             str(p_target_day_dir.name)
                         )
-                        make_summary(product_code, p_day_dir, daily=True)
+                        success = make_summary(product_code, p_day_dir, daily=True)
+                        if not success:
+                            logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                            return
             else:
                 target_day_dir_list = s3.listdir(str(p_month_dir))
                 for target_day_dir in target_day_dir_list:
@@ -821,13 +910,19 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                         p_day_dir = p_month_dir.joinpath(
                             target_day_dir.split('/')[-2]
                         )
-                        make_summary(product_code, p_day_dir, daily=True)
+                        success = make_summary(product_code, p_day_dir, daily=True)
+                        if not success:
+                            logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                            return
         else:
             p_day_dir = p_month_dir.joinpath(str(day))
-            make_summary(product_code, p_day_dir, daily=True)
-        make_summary(product_code, p_month_dir)
-    make_summary(product_code, p_year_dir)
-    make_summary(product_code, p_product_dir)
+            success = make_summary(product_code, p_day_dir, daily=True)
+            if not success:
+                logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
+                return
+        success = make_summary(product_code, p_month_dir)
+    success = make_summary(product_code, p_year_dir)
+    success = make_summary(product_code, p_product_dir)
 
     logger.debug(f'[{product_code} {year} {month} {day}] 集計データ作成終了')
 

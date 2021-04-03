@@ -1,4 +1,4 @@
-from manage import LOCAL, REF_LOCAL
+from manage import LOCAL
 import pandas as pd
 from logging import getLogger
 import os
@@ -21,8 +21,6 @@ if LOCAL:
 else:
     import aws
 
-# else:
-#     from aws import decrypt
 
 # HTTP Public API (GET)
 HTTP_PUBLIC_API = {
@@ -53,10 +51,12 @@ HTTP_PRIVATE_API = {
 
 }
 
-API_KEY_PATH = 'private/api_key.json'
-
 
 class BitflyerAPI:
+    """BitflyerAPI
+    TODO: add functions to this class
+    """
+
     def __init__(self, method, process_path, params={}):
         self.base_url = 'https://api.bitflyer.com'
         self.process_path = process_path
@@ -85,13 +85,6 @@ class BitflyerAPI:
         if not LOCAL:
             self.api_key = aws.decrypt(self.api_key)
             self.api_secret = aws.decrypt(self.api_secret)
-
-        # if REF_LOCAL:
-        #     self.api_key = os.environ.get('API_KEY')
-        #     self.api_secret = os.environ.get('API_SECRET')
-        # else:
-        #     self.api_key = decrypt(os.environ.get('API_KEY'))
-        #     self.api_secret = decrypt(os.environ.get('API_SECRET'))
 
     def sign(self, body={}):
         if self.method == 'GET':

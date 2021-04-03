@@ -26,7 +26,7 @@ class S3:
         df = pd.read_csv(StringIO(bodystr))
         return df
 
-    def to_csv(self, object_key, df, index=True):
+    def to_csv(self, object_key, df, index):
         df_csv = df.to_csv(index=index)
         new_object = self.bucket.Object(object_key)
         new_object.put(Body=df_csv)
