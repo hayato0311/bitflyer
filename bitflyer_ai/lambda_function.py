@@ -6,7 +6,7 @@ from logging import basicConfig, StreamHandler, FileHandler, getLogger, Formatte
 from bitflyer_api import *
 from ai import *
 from preprocess import *
-from manage import REF_LOCAL, PROFIT_DIR, CHILD_ORDERS_DIR
+from manage import REF_LOCAL, PROFIT_DIR, VOLUME_DIR, CHILD_ORDERS_DIR
 
 from utils import path_exists, read_csv, df_to_csv
 
@@ -39,7 +39,7 @@ else:
 logger = getLogger(__name__)
 
 
-def calc_profit(product_code, child_orders, current_datetime, latest_summary):
+def calc_profit(product_code, child_orders, latest_summary):
     """利益を計算する関数
 
     必要な取引価格
@@ -82,37 +82,31 @@ def calc_profit(product_code, child_orders, current_datetime, latest_summary):
     if path_exists(p_daily_profit_path):
         df_daily_profit = read_csv(str(p_daily_profit_path))
         df_daily_profit = df_daily_profit.set_index('date')
-        rearlized_profit = 0
-        unrealized_profit = 0
-        if child_orders['short'].empty:
-            if not child_orders['long'].empty:
-                if before_1d_date in df_daily_profit.index.tolist() and f'{product_code}_unrealized' in df_daily_profit.columns.tolist():
-                    unrealized_profit = child_orders['long']['cumsum_profit'].values[-1] - df_daily_profit[before_1d_date, f'{product_code}_unrealized']
-                else:
-                    unrealized_profit = child_orders['long']['cumsum_profit'].values[-1]
-        else:
-            if before_1d_date in df_daily_profit.index.tolist() and f'{product_code}_realized' in df_daily_profit.columns.tolist():
-                rearlized_profit = child_orders['short']['cumsum_profit'].max() - df_daily_profit[before_1d_date, f'{product_code}_realized']
-            else:
-                rearlized_profit = child_orders['short']['cumsum_profit'].max()
+        rearlized_profit_all = 0
+        unrealized_profit_all = 0
+        if not child_orders['long'].empty:
+            unrealized_profit_all += float(child_orders['long']['profit'].sum())
+        if not child_orders['short'].empty:
+            rearlized_profit_all += float(child_orders['short']['profit'].sum())
 
-            if not child_orders['long'].empty:
-                if before_1d_date in df_daily_profit.index.tolist() and f'{product_code}_unrealized' in df_daily_profit.columns.tolist():
-                    unrealized_profit = child_orders['long']['cumsum_profit'].values[-1] - df_daily_profit[before_1d_date, f'{product_code}_unrealized']
-                else:
-                    unrealized_profit = child_orders['long']['cumsum_profit'].values[-1]
+            df_active_sell_order = child_orders['short'].query('side == "SELL" and child_order_state == "ACTIVE"')
+            if not df_active_sell_order.empty:
+                child_order_acceptance_id_list = df_active_sell_order['related_child_order_acceptance_id'].values.tolist()
+                for child_order_acceptance_id in child_order_acceptance_id_list:
+                    unrealized_profit_all += (latest_summary['SELL']['now']['price'] - child_orders['short'][child_order_acceptance_id, 'price']) \
+                        * child_orders['short'][child_order_acceptance_id, 'size'] \
+                        - child_orders['short'][child_order_acceptance_id, 'total_commission_yen']
 
-                df_active_sell_order = child_orders['short'].query('side == "SELL" and child_order_state == "ACTIVE"')
-                if not df_active_sell_order.empty:
-                    child_order_acceptance_id_list = df_active_sell_order['related_child_order_acceptance_id'].values.tolist()
-                    for child_order_acceptance_id in child_order_acceptance_id_list:
-                        unrealized_profit += (latest_summary['SELL']['now']['price'] - child_orders['short'][child_order_acceptance_id, 'price']) \
-                            * child_orders['short'][child_order_acceptance_id, 'size'] \
-                            - child_orders['short'][child_order_acceptance_id, 'total_commission_yen']
+        rearlized_profit = rearlized_profit_all
+        unrealized_profit = unrealized_profit_all
 
-        df_daily_profit.at[current_date, f'{product_code}_total_profit'] = rearlized_profit + unrealized_profit
-        df_daily_profit.at[current_date, f'{product_code}_realized_profit'] = rearlized_profit
-        df_daily_profit.at[current_date, f'{product_code}_unrealized_profit'] = unrealized_profit
+        if len(df_daily_profit) >= 2:
+            rearlized_profit -= float(df_daily_profit.loc[df_daily_profit.index != current_date, f'{product_code}_realized_profit'].sum())
+            unrealized_profit -= float(df_daily_profit.loc[df_daily_profit.index != current_date, f'{product_code}_unrealized_profit'].sum())
+
+        df_daily_profit.at[current_date, f'{product_code}_total_profit'] = round(rearlized_profit + unrealized_profit, 1)
+        df_daily_profit.at[current_date, f'{product_code}_realized_profit'] = round(rearlized_profit, 1)
+        df_daily_profit.at[current_date, f'{product_code}_unrealized_profit'] = round(unrealized_profit, 1)
 
         unrealized_profit_list = []
         realized_profit_list = []
@@ -127,9 +121,9 @@ def calc_profit(product_code, child_orders, current_datetime, latest_summary):
         unrealized_profit_sum = df_daily_profit.loc[current_date, unrealized_profit_list].values.sum()
         realized_profit_sum = df_daily_profit.loc[current_date, realized_profit_list].values.sum()
         total_profit_sum = df_daily_profit.loc[current_date, total_profit_list].values.sum()
-        df_daily_profit.at[current_date, 'total_profit'] = total_profit_sum
-        df_daily_profit.at[current_date, 'realized_profit'] = realized_profit_sum
-        df_daily_profit.at[current_date, 'unrealized_profit'] = unrealized_profit_sum
+        df_daily_profit.at[current_date, 'total_profit'] = round(total_profit_sum, 1)
+        df_daily_profit.at[current_date, 'realized_profit'] = round(realized_profit_sum, 1)
+        df_daily_profit.at[current_date, 'unrealized_profit'] = round(unrealized_profit_sum, 1)
 
         df_to_csv(str(p_daily_profit_path), df_daily_profit, index=True)
     else:
@@ -239,6 +233,177 @@ def calc_profit(product_code, child_orders, current_datetime, latest_summary):
         df_to_csv(str(p_yearly_profit_path), df_yearly_profit, index=True)
 
 
+def calc_volume(product_code, child_orders):
+    """取引量を計算する関数
+
+    Args:
+        product_code ([type]): [description]
+        child_orders ([type]): [description]
+        current_datetime ([type]): [description]
+    """
+    p_volume_dir = Path(VOLUME_DIR)
+    p_daily_volume_path = p_volume_dir.joinpath('daily_volume.csv')
+    p_monthly_volume_path = p_volume_dir.joinpath('monthly_volume.csv')
+    p_yearly_volume_path = p_volume_dir.joinpath('yearly_volume.csv')
+
+    current_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    before_1d_datetime = current_datetime + relativedelta(days=-1)
+
+    current_month_start_datetime = current_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_month_end_datetime = current_month_start_datetime + relativedelta(months=+1)
+    current_month_start_datetime = pd.to_datetime(current_month_start_datetime)
+    current_month_end_datetime = pd.to_datetime(current_month_end_datetime)
+
+    current_year_start_datetime = current_datetime.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_year_end_datetime = current_year_start_datetime + relativedelta(years=+1)
+    current_year_start_datetime = pd.to_datetime(current_year_start_datetime)
+    current_year_end_datetime = pd.to_datetime(current_year_end_datetime)
+
+    current_date = current_datetime.strftime('%Y/%m/%d')
+    current_month = current_datetime.strftime('%Y/%m')
+    current_year = current_datetime.strftime('%Y')
+
+    before_1d_date = before_1d_datetime.strftime('%Y/%m/%d')
+    before_1d_month = before_1d_datetime.strftime('%Y/%m')
+    before_1d_year = before_1d_datetime.strftime('%Y')
+
+    buy_volume_all = 0
+    sell_volume_all = 0
+    if not child_orders['short'].empty:
+        df_buy_volume = child_orders['short'].loc[child_orders['short']['side'] == 'BUY', 'volume']
+        df_sell_volume = child_orders['short'].loc[child_orders['short']['side'] == 'SELL', 'volume']
+        if not df_buy_volume.empty:
+            buy_volume_all += float(df_buy_volume.sum())
+        if not df_sell_volume.empty:
+            sell_volume_all += float(df_sell_volume.sum())
+
+    if not child_orders['long'].empty:
+        df_buy_volume = child_orders['long']['volume']
+        if not df_buy_volume.empty:
+            buy_volume_all += float(df_buy_volume.sum())
+
+    if path_exists(p_daily_volume_path):
+        df_daily_volume = read_csv(str(p_daily_volume_path))
+        df_daily_volume = df_daily_volume.set_index('date')
+
+        buy_volume = buy_volume_all
+        sell_volume = sell_volume_all
+        if len(df_daily_volume) >= 2:
+            buy_volume -= float(df_daily_volume.loc[df_daily_volume.index != current_date, f'{product_code}_buy_volume'].sum())
+            sell_volume -= float(df_daily_volume.loc[df_daily_volume.index != current_date, f'{product_code}_sell_volume'].sum())
+
+        df_daily_volume.at[current_date, f'{product_code}_total_volume'] = round(buy_volume + sell_volume, 1)
+        df_daily_volume.at[current_date, f'{product_code}_buy_volume'] = round(buy_volume, 1)
+        df_daily_volume.at[current_date, f'{product_code}_sell_volume'] = round(sell_volume, 1)
+
+        buy_volume_list = []
+        sell_volume_list = []
+        total_volume_list = []
+        for col_num in df_daily_volume.columns.tolist():
+            if col_num.endswith('_buy_volume'):
+                buy_volume_list.append(col_num)
+            elif col_num.endswith('_sell_volume'):
+                sell_volume_list.append(col_num)
+            elif col_num.endswith('_total_volume'):
+                total_volume_list.append(col_num)
+        total_volume_sum = df_daily_volume.loc[current_date, total_volume_list].values.sum()
+        buy_volume_sum = df_daily_volume.loc[current_date, buy_volume_list].values.sum()
+        sell_volume_sum = df_daily_volume.loc[current_date, sell_volume_list].values.sum()
+        df_daily_volume.at[current_date, 'total_volume'] = round(total_volume_sum, 1)
+        df_daily_volume.at[current_date, 'buy_volume'] = round(buy_volume_sum, 1)
+        df_daily_volume.at[current_date, 'sell_volume'] = round(sell_volume_sum, 1)
+
+        df_to_csv(str(p_daily_volume_path), df_daily_volume, index=True)
+    else:
+        daily_volume = [
+            {
+                'date': current_date,
+                'total_volume': buy_volume_all + sell_volume_all,
+                'buy_volume': buy_volume_all,
+                'sell_volume': sell_volume_all,
+                f'{product_code}_total_volume': buy_volume_all + sell_volume_all,
+                f'{product_code}_buy_volume': buy_volume_all,
+                f'{product_code}_sell_volume': sell_volume_all,
+            },
+        ]
+        df_daily_volume = pd.DataFrame(daily_volume)
+        df_daily_volume = df_daily_volume.set_index('date')
+        df_to_csv(str(p_daily_volume_path), df_daily_volume, index=True)
+
+    df_daily_volume.index = pd.to_datetime(df_daily_volume.index)
+    df_daily_volume.index = df_daily_volume.index.tz_localize('Asia/Tokyo')
+
+    df_daily_volume_current_month = df_daily_volume[current_month_start_datetime: current_month_end_datetime]
+    df_daily_volume_current_month_sum = df_daily_volume_current_month.sum()
+
+    if path_exists(p_monthly_volume_path):
+        df_monthly_volume = read_csv(str(p_monthly_volume_path))
+        df_monthly_volume = df_monthly_volume.set_index('date')
+
+        if current_month in df_monthly_volume.index.tolist():
+            current_month_sum_dict = df_daily_volume_current_month_sum.to_dict()
+            for col_name, val in current_month_sum_dict.items():
+                if col_name in df_monthly_volume.columns:
+                    df_monthly_volume.at[current_month, col_name] = val
+                else:
+                    df_monthly_volume[col_name] = val
+
+        else:
+            current_month_sum_dict = df_daily_volume_current_month_sum.to_dict()
+            current_month_volume = []
+            for col_name in df_monthly_volume.columns.tolist():
+                if col_name in current_year_sum_dict.keys():
+                    current_month_volume.append(current_year_sum_dict[col_name])
+                else:
+                    current_month_volume.append(0)
+            df_monthly_volume.loc[current_month] = current_month_volume
+
+        df_to_csv(str(p_monthly_volume_path), df_monthly_volume, index=True)
+    else:
+        current_month_volume_dict = {'date': current_month}
+        current_month_volume_dict.update(df_daily_volume_current_month_sum.to_dict())
+        df_monthly_volume = pd.DataFrame([current_month_volume_dict])
+        df_monthly_volume = df_monthly_volume.set_index('date')
+        df_to_csv(str(p_monthly_volume_path), df_monthly_volume, index=True)
+
+    df_monthly_volume.index = pd.to_datetime(df_monthly_volume.index)
+    df_monthly_volume.index = df_monthly_volume.index.tz_localize('Asia/Tokyo')
+
+    df_monthly_volume_current_year = df_monthly_volume[current_year_start_datetime: current_year_end_datetime]
+    df_monthly_volume_current_year_sum = df_monthly_volume_current_year.sum()
+
+    if path_exists(p_yearly_volume_path):
+        df_yearly_volume = read_csv(str(p_yearly_volume_path))
+        df_yearly_volume['date'] = df_yearly_volume['date'].astype(str)
+        df_yearly_volume = df_yearly_volume.set_index('date')
+
+        if current_year in df_yearly_volume.index.tolist():
+            current_year_sum_dict = df_monthly_volume_current_year_sum.to_dict()
+            for col_name, val in current_year_sum_dict.items():
+                if col_name in df_yearly_volume.columns:
+                    df_yearly_volume.at[current_year, col_name] = val
+                else:
+                    df_yearly_volume[col_name] = val
+
+        else:
+            current_year_sum_dict = df_monthly_volume_current_year_sum.to_dict()
+            current_year_volume = []
+            for col_name in df_yearly_volume.columns.tolist():
+                if col_name in current_year_sum_dict.keys():
+                    current_year_volume.append(current_year_sum_dict[col_name])
+                else:
+                    current_year_volume.append(0)
+            df_yearly_volume.loc[current_year] = current_year_volume
+
+        df_to_csv(str(p_yearly_volume_path), df_yearly_volume, index=True)
+    else:
+        current_year_volume_dict = {'date': current_year}
+        current_year_volume_dict.update(df_monthly_volume_current_year_sum.to_dict())
+        df_yearly_volume = pd.DataFrame([current_year_volume_dict])
+        df_yearly_volume = df_yearly_volume.set_index('date')
+        df_to_csv(str(p_yearly_volume_path), df_yearly_volume, index=True)
+
+
 def trading(product_code):
     board_state = get_board_state(product_code)
     if board_state['state'] != 'RUNNING':
@@ -279,7 +444,14 @@ def trading(product_code):
             ai.short_term()
         logger.info(f'[{product_code}] 注文完了')
 
-    calc_profit(product_code, ai.child_orders, current_datetime, latest_summary)
+    logger.info(f'[{product_code}] 利益集計中...')
+    ai.update_long_term_profit()
+    calc_profit(product_code, ai.child_orders, latest_summary)
+    logger.info(f'[{product_code}] 利益集計完了')
+
+    logger.info(f'[{product_code}] 取引量集計中...')
+    calc_volume(product_code, ai.child_orders)
+    logger.info(f'[{product_code}] 取引量集計完了')
 
 
 def lambda_handler(event, context):

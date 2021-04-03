@@ -115,6 +115,7 @@ class AI:
         child_orders_tmp['related_child_order_acceptance_id'] = related_child_order_acceptance_id
         child_orders_tmp['total_commission_yen'] = 0
         child_orders_tmp['profit'] = 0
+        child_orders_tmp['volume'] = child_orders_tmp['price'] * child_orders_tmp['size']
 
         if self.child_orders[term].empty:
             self.child_orders[term] = child_orders_tmp
@@ -368,13 +369,9 @@ class AI:
             df_to_csv(str(self.p_child_orders_path['long']), self.child_orders['long'], index=True)
             logger.debug(f'{str(self.p_child_orders_path["long"])} が更新されました。')
 
-    def update_profits(self):
-        self.update_long_term_profit()
-
     def long_term(self):
         # 最新情報を取得
         self.update_child_orders(term='long')
-        self.update_long_term_profit()
 
         if int(os.environ.get('LONG_DAILY', 0)):
             # daily
