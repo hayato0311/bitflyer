@@ -151,7 +151,7 @@ class AI:
                 profit = sell_price * sell_size - buy_price * buy_size
                 profit -= sell_commission + buy_commission
 
-                logger.info(f'{profit}円の利益が発生しました。')
+                logger.info(f'[{self.product_code} {term} {child_order_cycle}] {profit}円の利益が発生しました。')
 
                 self.child_orders[term].at[child_order_acceptance_id, 'profit'] = profit
                 self.child_orders[term]['cumsum_profit'] = self.child_orders[term]['profit'].cumsum()
@@ -209,7 +209,7 @@ class AI:
             self._delte_order(term, child_order_acceptance_id)
             print('================================================================')
             logger.info(
-                f'[{term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。'
+                f'[{self.product_code} {term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。'
             )
             print('================================================================')
         else:
@@ -233,7 +233,7 @@ class AI:
         price = int(local_prices['low'] * price_rate)
         if price >= global_prices['high'] * self.max_buy_prices_rate[term]:
             logger.info(
-                f'[{term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。'
+                f'[{self.product_code} {term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。'
             )
             return
 
@@ -244,6 +244,8 @@ class AI:
         size = round(size, 3)
 
         target_buy_history = pd.DataFrame()
+        target_buy_history_active = pd.DataFrame()
+        target_buy_history_completed = pd.DataFrame()
         same_category_order = pd.DataFrame()
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
@@ -262,13 +264,13 @@ class AI:
 
         if not same_category_order.empty:
             logger.info(
-                f'[{term} {child_order_cycle}] すでに注文済みのため、購入できません。'
+                f'[{self.product_code} {term} {child_order_cycle}] すでに注文済みのため、購入できません。'
             )
             return
 
         if not target_buy_history_completed.empty:
             logger.info(
-                f'[{term} {child_order_cycle}] 約定済みの注文から十分な時間が経過していないため、新規の買い注文はできません。'
+                f'[{self.product_code} {term} {child_order_cycle}] 約定済みの注文から十分な時間が経過していないため、新規の買い注文はできません。'
             )
             return
 
@@ -282,7 +284,7 @@ class AI:
                         f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。'
                     )
                 logger.info(
-                    f'[{term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、前回の注文をキャンセルし、新規の買い注文を行います。'
+                    f'[{self.product_code} {term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、前回の注文をキャンセルし、新規の買い注文を行います。'
                 )
                 self._cancel(
                     term=term,
@@ -292,7 +294,7 @@ class AI:
                 )
             else:
                 logger.info(
-                    f'[{term} {child_order_cycle}] 同じサイクルを持つACTIVEな買い注文が存在しないため、買い注文を行います。'
+                    f'[{self.product_code} {term} {child_order_cycle}] 同じサイクルを持つACTIVEな買い注文が存在しないため、買い注文を行います。'
                 )
             # ----------------------------------------------------------------
             # 買い注文
@@ -315,16 +317,22 @@ class AI:
                 )
 
     def _sell(self, term, child_order_cycle, rate):
+        if self.child_orders[term].empty:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle}] 買い注文がないため、売り注文はできません。'
+            )
+            return
+
         related_buy_order = self.child_orders[term].query(
             'side=="BUY" and child_order_state == "COMPLETED" and child_order_cycle == @child_order_cycle and related_child_order_acceptance_id == "no_id"').copy()
         if related_buy_order.empty:
             logger.info(
-                f'[{term}, {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。'
+                f'[{self.product_code} {term} {child_order_cycle}] 約定済みの買い注文がないため、売り注文はできません。'
             )
         else:
             if len(related_buy_order) >= 2:
                 logger.warning(
-                    f'[{term}, {child_order_cycle}] 同じフラグを持つ約定済みの買い注文が2つ以上あります。'
+                    f'[{self.product_code} {term} {child_order_cycle}] 同じフラグを持つ約定済みの買い注文が2つ以上あります。'
                 )
             for i in range(len(related_buy_order)):
                 price = int(int(related_buy_order['price'].values[i]) * rate)
