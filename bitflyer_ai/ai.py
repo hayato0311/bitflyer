@@ -328,8 +328,8 @@ class AI:
                 )
             for i in range(len(related_buy_order)):
                 price = int(int(related_buy_order['price'].values[i]) * rate)
-                if price < self.latest_summary['SELL']['1h']['price']['high']:
-                    price = self.latest_summary['SELL']['1h']['price']['high']
+                if price < self.latest_summary['SELL']['6h']['price']['high']:
+                    price = self.latest_summary['SELL']['6h']['price']['high']
                 size = round(float(related_buy_order['size'].values[i]), 3)
                 response = send_child_order(self.product_code, 'LIMIT', 'SELL',
                                             price=price, size=size)
