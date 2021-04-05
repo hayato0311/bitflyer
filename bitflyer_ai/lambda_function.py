@@ -104,9 +104,12 @@ def calc_profit(product_code, child_orders, latest_summary):
             rearlized_profit -= float(df_daily_profit.loc[df_daily_profit.index != current_date, f'{product_code}_realized_profit'].sum())
             unrealized_profit -= float(df_daily_profit.loc[df_daily_profit.index != current_date, f'{product_code}_unrealized_profit'].sum())
 
-        df_daily_profit.at[current_date, f'{product_code}_total_profit'] = round(rearlized_profit + unrealized_profit, 1)
-        df_daily_profit.at[current_date, f'{product_code}_realized_profit'] = round(rearlized_profit, 1)
-        df_daily_profit.at[current_date, f'{product_code}_unrealized_profit'] = round(unrealized_profit, 1)
+        rearlized_profit = round(rearlized_profit, 1)
+        unrealized_profit = round(unrealized_profit, 1)
+
+        df_daily_profit.at[current_date, f'{product_code}_total_profit'] = rearlized_profit + unrealized_profit
+        df_daily_profit.at[current_date, f'{product_code}_realized_profit'] = rearlized_profit
+        df_daily_profit.at[current_date, f'{product_code}_unrealized_profit'] = unrealized_profit
 
         unrealized_profit_list = []
         realized_profit_list = []
@@ -118,6 +121,8 @@ def calc_profit(product_code, child_orders, latest_summary):
                 realized_profit_list.append(col_num)
             elif col_num.endswith('_total_profit'):
                 total_profit_list.append(col_num)
+
+        df_daily_profit = df_daily_profit.fillna(0)
         unrealized_profit_sum = df_daily_profit.loc[current_date, unrealized_profit_list].values.sum()
         realized_profit_sum = df_daily_profit.loc[current_date, realized_profit_list].values.sum()
         total_profit_sum = df_daily_profit.loc[current_date, total_profit_list].values.sum()
@@ -144,6 +149,10 @@ def calc_profit(product_code, child_orders, latest_summary):
                         unrealized_profit += (latest_summary['SELL']['now']['price'] - child_orders['short'][child_order_acceptance_id, 'price']) \
                             * child_orders['short'][child_order_acceptance_id, 'size'] \
                             - child_orders['short'][child_order_acceptance_id, 'total_commission_yen']
+
+        rearlized_profit = round(rearlized_profit, 1)
+        unrealized_profit = round(unrealized_profit, 1)
+
         daily_profit = [
             {
                 'date': current_date,
@@ -292,9 +301,12 @@ def calc_volume(product_code, child_orders):
             buy_volume -= float(df_daily_volume.loc[df_daily_volume.index != current_date, f'{product_code}_buy_volume'].sum())
             sell_volume -= float(df_daily_volume.loc[df_daily_volume.index != current_date, f'{product_code}_sell_volume'].sum())
 
-        df_daily_volume.at[current_date, f'{product_code}_total_volume'] = round(buy_volume + sell_volume, 1)
-        df_daily_volume.at[current_date, f'{product_code}_buy_volume'] = round(buy_volume, 1)
-        df_daily_volume.at[current_date, f'{product_code}_sell_volume'] = round(sell_volume, 1)
+        buy_volume = round(buy_volume, 1)
+        sell_volume = round(sell_volume, 1)
+
+        df_daily_volume.at[current_date, f'{product_code}_total_volume'] = buy_volume + sell_volume
+        df_daily_volume.at[current_date, f'{product_code}_buy_volume'] = buy_volume
+        df_daily_volume.at[current_date, f'{product_code}_sell_volume'] = sell_volume
 
         buy_volume_list = []
         sell_volume_list = []
@@ -306,6 +318,8 @@ def calc_volume(product_code, child_orders):
                 sell_volume_list.append(col_num)
             elif col_num.endswith('_total_volume'):
                 total_volume_list.append(col_num)
+
+        df_daily_volume = df_daily_volume.fillna(0)
         total_volume_sum = df_daily_volume.loc[current_date, total_volume_list].values.sum()
         buy_volume_sum = df_daily_volume.loc[current_date, buy_volume_list].values.sum()
         sell_volume_sum = df_daily_volume.loc[current_date, sell_volume_list].values.sum()
@@ -315,6 +329,9 @@ def calc_volume(product_code, child_orders):
 
         df_to_csv(str(p_daily_volume_path), df_daily_volume, index=True)
     else:
+        buy_volume_all = round(buy_volume_all, 1)
+        sell_volume_all = round(sell_volume_all, 1)
+
         daily_volume = [
             {
                 'date': current_date,
