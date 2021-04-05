@@ -614,16 +614,7 @@ def obtain_latest_summary(product_code):
     latest_summary = {
         'BUY': {
             'now': {
-                'price': df_buy_1h['close_price'].values[-1],
-            },
-            '1h': {
-                'price': {
-                    'open': df_buy_1h['open_price'].values[0],
-                    'high': df_buy_1h['high_price'].max(),
-                    'low': df_buy_1h['low_price'].min(),
-                    'close': df_buy_1h['close_price'].values[-1],
-                },
-                'trend': 'DOWN',
+                'price': df_buy_1d['close_price'].values[-1],
             },
             '6h': {
                 'price': {
@@ -683,15 +674,6 @@ def obtain_latest_summary(product_code):
         'SELL': {
             'now': {
                 'price': df_sell_1h['close_price'].values[-1],
-            },
-            '1h': {
-                'price': {
-                    'open': df_sell_1h['open_price'].values[0],
-                    'high': df_sell_1h['high_price'].max(),
-                    'low': df_sell_1h['low_price'].min(),
-                    'close': df_sell_1h['close_price'].values[-1],
-                },
-                'trend': 'DOWN',
             },
             '6h': {
                 'price': {
