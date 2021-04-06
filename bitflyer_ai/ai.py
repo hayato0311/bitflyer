@@ -237,7 +237,7 @@ class AI:
             )
             return
 
-        size_rate = 32 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
+        size_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
 
         size = self.min_size[term] * size_rate
 
