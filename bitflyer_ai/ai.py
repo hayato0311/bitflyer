@@ -243,12 +243,16 @@ class AI:
 
         size = round(size, 3)
 
+        buy_active_same_price = pd.DataFrame()
         target_buy_history = pd.DataFrame()
         target_buy_history_active = pd.DataFrame()
         target_buy_history_completed = pd.DataFrame()
         same_category_order = pd.DataFrame()
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
+            buy_active_same_price = self.child_orders[term].query(
+                'side == "BUY" and child_order_state == "ACTIVE" and price == @price'
+            )
             target_buy_history = self.child_orders[term].query(
                 'side == "BUY" and child_order_date > @target_datetime and child_order_cycle == @child_order_cycle'
             )
@@ -261,7 +265,11 @@ class AI:
             same_category_order = self.child_orders[term].query(
                 'side == "BUY" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle'
             ).copy()
-
+        if not buy_active_same_price.empty:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle}] 同じ価格での注文がすでにあるため、購入できません。'
+            )
+            return
         if not same_category_order.empty:
             logger.info(
                 f'[{self.product_code} {term} {child_order_cycle}] すでに注文済みのため、購入できません。'

@@ -140,13 +140,13 @@ class BitflyerAPI:
             response_json = response.json()
             if response_json['status'] == -200:
                 logger.info(
-                    f'[{name}　{body["price"] * body["size"]}] 残高不足により、新規注文に失敗しました。')
+                    f'[{name} {body["side"]}　{body["price"]} {body["size"]}] 残高不足により、新規注文に失敗しました。')
             elif response_json['status'] == -106:
                 logger.info(
-                    f'[{name} {body["price"]} {body["size"]}] 注文価格が低すぎるため、新規注文に失敗しました。')
+                    f'[{name} {body["side"]} {body["price"]} {body["size"]}] 注文価格が低すぎるため、新規注文に失敗しました。')
             elif response_json['status'] == -107:
                 logger.info(
-                    f'[{name} {body["price"]} {body["size"]}] 注文価格が高すぎるため、新規注文に失敗しました。')
+                    f'[{name} {body["side"]} {body["price"]} {body["size"]}] 注文価格が高すぎるため、新規注文に失敗しました。')
             elif response_json['status'] == -2:
                 logger.info(f'[{name}] メンテナンス中です。')
             else:
