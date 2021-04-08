@@ -93,9 +93,9 @@ def calc_profit(product_code, child_orders, latest_summary):
             if not df_active_sell_order.empty:
                 child_order_acceptance_id_list = df_active_sell_order['related_child_order_acceptance_id'].values.tolist()
                 for child_order_acceptance_id in child_order_acceptance_id_list:
-                    unrealized_profit_all += (latest_summary['SELL']['now']['price'] - child_orders['short'][child_order_acceptance_id, 'price']) \
-                        * child_orders['short'][child_order_acceptance_id, 'size'] \
-                        - child_orders['short'][child_order_acceptance_id, 'total_commission_yen']
+                    unrealized_profit_all += (latest_summary['SELL']['now']['price'] - child_orders['short'].at[child_order_acceptance_id, 'price']) \
+                        * child_orders['short'].at[child_order_acceptance_id, 'size'] \
+                        - child_orders['short'].at[child_order_acceptance_id, 'total_commission_yen']
 
         rearlized_profit = rearlized_profit_all
         unrealized_profit = unrealized_profit_all
