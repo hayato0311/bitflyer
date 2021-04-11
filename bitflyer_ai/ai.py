@@ -265,14 +265,10 @@ class AI:
             same_category_order = self.child_orders[term].query(
                 'side == "BUY" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle'
             ).copy()
+
         if not buy_active_same_price.empty:
             logger.info(
                 f'[{self.product_code} {term} {child_order_cycle}] 同じ価格での注文がすでにあるため、購入できません。'
-            )
-            return
-        if not same_category_order.empty:
-            logger.info(
-                f'[{self.product_code} {term} {child_order_cycle}] すでに注文済みのため、購入できません。'
             )
             return
 
@@ -282,47 +278,58 @@ class AI:
             )
             return
 
-        if target_buy_history_active.empty or same_category_order.empty:
-            # ----------------------------------------------------------------
-            # 同じカテゴリーの注文がすでに存在していた場合、前の注文をキャンセルする。
-            # ----------------------------------------------------------------
-            if not same_category_order.empty:
-                if len(same_category_order) >= 2:
-                    logger.error(
-                        f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。'
-                    )
-                logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、前回の注文をキャンセルし、新規の買い注文を行います。'
+        if same_category_order.empty:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle}] 同じサイクルを持つACTIVEな買い注文が存在しないため、買い注文を行います。'
+            )
+        else:
+            if len(same_category_order) >= 2:
+                logger.error(
+                    f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。'
                 )
-                self._cancel(
-                    term=term,
-                    child_order_cycle=child_order_cycle,
-                    child_order_acceptance_id=same_category_order.index[0],
-                    child_order_type='buy'
+            if target_buy_history_active.empty:
+                logger.info(
+                    f'[{self.product_code} {term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、買い注文を更新します。'
                 )
             else:
-                logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle}] 同じサイクルを持つACTIVEな買い注文が存在しないため、買い注文を行います。'
-                )
-            # ----------------------------------------------------------------
-            # 買い注文
-            # ----------------------------------------------------------------
+                if price == same_category_order['price'].values[0]:
+                    logger.info(
+                        f'[{self.product_code} {term} {child_order_cycle}] すでに注文済みのため、購入できません。'
+                    )
+                    return
+                else:
+                    logger.info(
+                        f'[{self.product_code} {term} {child_order_cycle}] 価格が変動したため、買い注文を更新します。'
+                    )
 
-            response = send_child_order(
-                self.product_code, 'LIMIT', 'BUY', price=price, size=size
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {same_category_order["price"].values[0]} {same_category_order["size"].values[0]}] 買い注文をキャンセルします。'
             )
-            response_json = response.json()
-            if response.status_code == 200:
-                print('================================================================')
-                logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!'
-                )
-                print('================================================================')
-                self.update_child_orders(
-                    term=term,
-                    child_order_acceptance_id=response_json['child_order_acceptance_id'],
-                    child_order_cycle=child_order_cycle,
-                )
+            self._cancel(
+                term=term,
+                child_order_cycle=child_order_cycle,
+                child_order_acceptance_id=same_category_order.index[0],
+                child_order_type='buy'
+            )
+
+        # ----------------------------------------------------------------
+        # 買い注文
+        # ----------------------------------------------------------------
+        response = send_child_order(
+            self.product_code, 'LIMIT', 'BUY', price=price, size=size
+        )
+        response_json = response.json()
+        if response.status_code == 200:
+            print('================================================================')
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!'
+            )
+            print('================================================================')
+            self.update_child_orders(
+                term=term,
+                child_order_acceptance_id=response_json['child_order_acceptance_id'],
+                child_order_cycle=child_order_cycle,
+            )
 
     def _sell(self, term, child_order_cycle, rate):
         if self.child_orders[term].empty:
