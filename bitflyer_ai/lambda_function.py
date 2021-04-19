@@ -447,8 +447,11 @@ def trading(product_code):
 
     ai = AI(
         product_code=product_code,
-        min_size_short=float(os.environ.get(f'{product_code}_SHORT_MIN_SIZE', 0.001)),
-        min_size_long=float(os.environ.get(f'{product_code}_LONG_MIN_SIZE', 0.001)),
+        min_size=float(os.environ.get(f'{product_code}_MIN_SIZE', 0)),
+        min_volume_short=float(os.environ.get(f'{product_code}_SHORT_MIN_VOLUME', 1000)),
+        max_volume_short=float(os.environ.get(f'{product_code}_SHORT_MAX_VOLUME', 10000)),
+        min_volume_long=float(os.environ.get(f'{product_code}_LONG_MIN_VOLUME', 10000)),
+        max_volume_long=float(os.environ.get(f'{product_code}_LONG_MIN_VOLUME', 30000)),
         time_diff=9,
         latest_summary=latest_summary
     )

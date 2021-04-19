@@ -23,13 +23,17 @@ class AI:
     def __init__(self,
                  latest_summary,
                  product_code,
-                 min_size_short=0.01,
-                 min_size_long=0.1,
+                 min_size,
+                 min_volume_short=2000,
+                 min_volume_long=10000,
+                 max_volume_short=10000,
+                 max_volume_long=30000,
                  time_diff=9,
                  region='Asia/Tokyo',
                  bucket_name=''):
 
         self.product_code = product_code
+        self.min_size = min_size
 
         p_child_orders_dir = Path(CHILD_ORDERS_DIR)
         p_child_orders_dir = p_child_orders_dir.joinpath(self.product_code)
@@ -69,9 +73,19 @@ class AI:
 
         self.datetime_references['monthly'] = self.datetime_references['now'] - datetime.timedelta(days=31)
 
-        self.min_size = {
-            'long': min_size_long,
-            'short': min_size_short,
+        # self.min_size = {
+        #     'long': min_size_long,
+        #     'short': min_size_short,
+        # }
+
+        self.min_volume = {
+            'long': min_volume_long,
+            'short': min_volume_short,
+        }
+
+        self.max_volume = {
+            'long': max_volume_long,
+            'short': max_volume_short,
         }
 
         self.max_buy_prices_rate = {
@@ -236,12 +250,25 @@ class AI:
                 f'[{self.product_code} {term} {child_order_cycle} {price}] 過去最高価格に近いため、購入できません。'
             )
             return
+        elif price <= self.latest_summary['BUY']['now']['price'] * 0.75:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {price}] 注文価格が低すぎるため、購入できません。'
+            )
+            return
 
-        size_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
+        # size_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
+        # size = self.min_size[term] * size_rate
 
-        size = self.min_size[term] * size_rate
+        volume_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
+        volume = self.min_volume[term] * volume_rate
+        if volume > self.max_volume[term]:
+            volume = self.max_volume[term]
 
+        size = volume / self.latest_summary['BUY']['now']['price']
         size = round(size, 3)
+
+        if size < self.min_size:
+            size = self.min_size
 
         buy_active_same_price = pd.DataFrame()
         target_buy_history = pd.DataFrame()
