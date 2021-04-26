@@ -1,15 +1,17 @@
 import datetime
-from dateutil.relativedelta import relativedelta
+import os
+from logging import (DEBUG, INFO, FileHandler, StreamHandler, basicConfig,
+                     getLogger)
+from pathlib import Path
+
 import pandas as pd
-from logging import basicConfig, StreamHandler, FileHandler, getLogger, Formatter, DEBUG, INFO
+from dateutil.relativedelta import relativedelta
 
-from bitflyer_api import *
-from ai import *
-from preprocess import *
-from manage import REF_LOCAL, PROFIT_DIR, VOLUME_DIR, CHILD_ORDERS_DIR
-
-from utils import path_exists, read_csv, df_to_csv
-
+from ai import AI
+from bitflyer_api import get_board_state
+from manage import PROFIT_DIR, REF_LOCAL, VOLUME_DIR
+from preprocess import delete_row_data, obtain_latest_summary
+from utils import df_to_csv, path_exists, read_csv
 
 if REF_LOCAL:
     sh = StreamHandler()
@@ -59,7 +61,6 @@ def calc_profit(product_code, child_orders, latest_summary):
     p_yearly_profit_path = p_profit_dir.joinpath('yearly_profit.csv')
 
     current_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    before_1d_datetime = current_datetime + relativedelta(days=-1)
 
     current_month_start_datetime = current_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     current_month_end_datetime = current_month_start_datetime + relativedelta(months=+1)
@@ -74,10 +75,6 @@ def calc_profit(product_code, child_orders, latest_summary):
     current_date = current_datetime.strftime('%Y/%m/%d')
     current_month = current_datetime.strftime('%Y/%m')
     current_year = current_datetime.strftime('%Y')
-
-    before_1d_date = before_1d_datetime.strftime('%Y/%m/%d')
-    before_1d_month = before_1d_datetime.strftime('%Y/%m')
-    before_1d_year = before_1d_datetime.strftime('%Y')
 
     if path_exists(p_daily_profit_path):
         df_daily_profit = read_csv(str(p_daily_profit_path))
@@ -190,8 +187,8 @@ def calc_profit(product_code, child_orders, latest_summary):
             current_month_sum_dict = df_daily_profit_current_month_sum.to_dict()
             current_month_profit = []
             for col_name in df_monthly_profit.columns.tolist():
-                if col_name in current_year_sum_dict.keys():
-                    current_month_profit.append(current_year_sum_dict[col_name])
+                if col_name in current_month_sum_dict.keys():
+                    current_month_profit.append(current_month_sum_dict[col_name])
                 else:
                     current_month_profit.append(0)
             df_monthly_profit.loc[current_month] = current_month_profit
@@ -256,7 +253,6 @@ def calc_volume(product_code, child_orders):
     p_yearly_volume_path = p_volume_dir.joinpath('yearly_volume.csv')
 
     current_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    before_1d_datetime = current_datetime + relativedelta(days=-1)
 
     current_month_start_datetime = current_datetime.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     current_month_end_datetime = current_month_start_datetime + relativedelta(months=+1)
@@ -271,10 +267,6 @@ def calc_volume(product_code, child_orders):
     current_date = current_datetime.strftime('%Y/%m/%d')
     current_month = current_datetime.strftime('%Y/%m')
     current_year = current_datetime.strftime('%Y')
-
-    before_1d_date = before_1d_datetime.strftime('%Y/%m/%d')
-    before_1d_month = before_1d_datetime.strftime('%Y/%m')
-    before_1d_year = before_1d_datetime.strftime('%Y')
 
     buy_volume_all = 0
     sell_volume_all = 0
@@ -369,8 +361,8 @@ def calc_volume(product_code, child_orders):
             current_month_sum_dict = df_daily_volume_current_month_sum.to_dict()
             current_month_volume = []
             for col_name in df_monthly_volume.columns.tolist():
-                if col_name in current_year_sum_dict.keys():
-                    current_month_volume.append(current_year_sum_dict[col_name])
+                if col_name in current_month_sum_dict.keys():
+                    current_month_volume.append(current_month_sum_dict[col_name])
                 else:
                     current_month_volume.append(0)
             df_monthly_volume.loc[current_month] = current_month_volume

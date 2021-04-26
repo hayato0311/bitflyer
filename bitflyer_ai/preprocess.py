@@ -1,24 +1,18 @@
-import json
 import datetime
 import time
-import pandas as pd
-from pathlib import Path
-from pprint import pprint
 from logging import getLogger
-import os
+from pathlib import Path
+
+import pandas as pd
 from dateutil.relativedelta import relativedelta
 
-from bitflyer_api import *
-from ai import *
-from manage import REF_LOCAL, BALANCE_LOG_DIR, EXECUTION_HISTORY_DIR
-
-from utils import path_exists, read_csv, df_to_csv
-
+from bitflyer_api import get_executions
+from manage import EXECUTION_HISTORY_DIR, REF_LOCAL
+from utils import df_to_csv, path_exists, read_csv
 
 logger = getLogger(__name__)
 
 if not REF_LOCAL:
-    from manage import BUCKET_NAME
     from aws import S3
     s3 = S3()
 
@@ -328,7 +322,7 @@ def make_summary_from_csv(
         p_summary_save_path = p_dir.joinpath('summary.csv')
     else:
         if len(summary_path_list) == 0:
-            logger.debug(f'対象となる集計データが存在しないため更新を終了します。')
+            logger.debug('対象となる集計データが存在しないため更新を終了します。')
             return
         elif len(summary_path_list) == 1:
             logger.debug(
@@ -473,11 +467,8 @@ def obtain_latest_summary(product_code):
     # daily summary
     current_datetime = datetime.datetime.now(
         datetime.timezone(datetime.timedelta(hours=9)))
-    before_1h_datetime = current_datetime - datetime.timedelta(hours=1)
-    before_6h_datetime = current_datetime - datetime.timedelta(hours=6)
+
     before_1d_datetime = current_datetime - datetime.timedelta(days=1)
-    before_2d_datetime = current_datetime - datetime.timedelta(days=2)
-    before_7d_datetime = current_datetime - datetime.timedelta(days=7)
     before_32d_datetime = current_datetime - datetime.timedelta(days=32)
     before_1m_datetime = current_datetime + relativedelta(months=-1)
     before_1y_datetime = current_datetime + relativedelta(years=-1)
@@ -492,15 +483,13 @@ def obtain_latest_summary(product_code):
     df_buy = df.query('side == "BUY"')
     df_sell = df.query('side == "SELL"')
 
-    df_buy_resample = df_buy[['price', 'size']]
-    df_sell_resample = df_sell[['price', 'size']]
+    df_buy_resampled, df_sell_resampled = resampling(df_buy[['price', 'size']], df_sell[['price', 'size']], freq='S')
 
-    df_buy_resampled, df_sell_resampled = resampling(
-        df_buy[['price', 'size']], df_sell[['price', 'size']], freq='S')
+    # before_1h_datetime = current_datetime - datetime.timedelta(hours=1)
+    # df_buy_1h = df_buy_resampled.query('index > @before_1h_datetime')
+    # df_sell_1h = df_sell_resampled.query('index > @before_1h_datetime')
 
-    df_buy_1h = df_buy_resampled.query('index > @before_1h_datetime')
-    df_sell_1h = df_sell_resampled.query('index > @before_1h_datetime')
-
+    before_6h_datetime = current_datetime - datetime.timedelta(hours=6)
     df_buy_6h = df_buy_resampled.query('index > @before_6h_datetime')
     df_sell_6h = df_sell_resampled.query('index > @before_6h_datetime')
 
@@ -673,7 +662,7 @@ def obtain_latest_summary(product_code):
         },
         'SELL': {
             'now': {
-                'price': df_sell_1h['close_price'].values[-1],
+                'price': df_sell_1d['close_price'].values[-1],
             },
             '6h': {
                 'price': {

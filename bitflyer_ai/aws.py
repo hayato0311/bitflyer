@@ -1,12 +1,13 @@
+import os
 from base64 import b64decode
-from botocore.errorfactory import ClientError
+from io import StringIO
+from logging import getLogger
+
 import boto3
 import pandas as pd
-from io import StringIO
+from botocore.errorfactory import ClientError
+
 from manage import BUCKET_NAME
-import os
-from logging import getLogger
-import json
 
 logger = getLogger(__name__)
 
@@ -72,7 +73,6 @@ class S3:
 
 
 def decrypt(encrypted):
-    kms = boto3.client('kms')
     decrypted = boto3.client('kms').decrypt(
         CiphertextBlob=b64decode(encrypted),
         EncryptionContext={

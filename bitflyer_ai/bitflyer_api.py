@@ -1,17 +1,14 @@
-from manage import LOCAL
-import pandas as pd
-from logging import getLogger
-import os
-from pathlib import Path
-from pprint import pprint
-import json
-import datetime
-import pytz
-import time
-import requests
-import hmac
 import hashlib
+import hmac
+import json
+import os
+import time
+from logging import getLogger
 
+import pandas as pd
+import requests
+
+from manage import LOCAL
 
 logger = getLogger(__name__)
 
@@ -151,7 +148,7 @@ class BitflyerAPI:
                 logger.info(f'[{name}] メンテナンス中です。')
             else:
                 logger.info(
-                    f'[{name} {result.status_code} {response_json["error_message"]} {body}] POSTに失敗しました。')
+                    f'[{name} {response_json["status"]} {response_json["error_message"]} {body}] POSTに失敗しました。')
         return response
 
 
@@ -308,7 +305,7 @@ def get_child_orders(product_code,
     else:
         response_json = response.json()
         logger.error(response_json['error_message'])
-        raise Exception(f"get_child_order was failed")
+        raise Exception("get_child_order was failed")
 
     return df
 

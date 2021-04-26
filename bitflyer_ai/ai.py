@@ -1,18 +1,20 @@
-from bitflyer_api import *
-import pandas as pd
-from pathlib import Path
-from logging import getLogger
-from manage import REF_LOCAL, BUCKET_NAME, CHILD_ORDERS_DIR
+import datetime
 import os
+import time
+from logging import getLogger
+from pathlib import Path
 
-from utils import path_exists, read_csv, df_to_csv
+import pandas as pd
 
-logger = getLogger(__name__)
-
+from bitflyer_api import cancel_child_order, get_child_orders, send_child_order
+from manage import CHILD_ORDERS_DIR, REF_LOCAL
+from utils import df_to_csv, path_exists, read_csv
 
 if not REF_LOCAL:
     from aws import S3
     s3 = S3()
+
+logger = getLogger(__name__)
 
 
 class AI:
@@ -72,11 +74,6 @@ class AI:
         self.datetime_references['weekly'] = self.datetime_references['now'] - datetime.timedelta(days=7)
 
         self.datetime_references['monthly'] = self.datetime_references['now'] - datetime.timedelta(days=31)
-
-        # self.min_size = {
-        #     'long': min_size_long,
-        #     'short': min_size_short,
-        # }
 
         self.min_volume = {
             'long': min_volume_long,
@@ -261,7 +258,9 @@ class AI:
 
         volume_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
         volume = self.min_volume[term] * volume_rate
-        if volume > self.max_volume[term]:
+        if volume < self.min_volume[term]:
+            volume = self.min_volume[term]
+        elif volume > self.max_volume[term]:
             volume = self.max_volume[term]
 
         size = volume / self.latest_summary['BUY']['now']['price']
@@ -349,7 +348,8 @@ class AI:
         if response.status_code == 200:
             print('================================================================')
             logger.info(
-                f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!'
+                f'[{self.product_code} {term} {child_order_cycle} {price} {size} '
+                + f'{response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!'
             )
             print('================================================================')
             self.update_child_orders(
@@ -387,7 +387,8 @@ class AI:
                     response_json = response.json()
                     print('================================================================')
                     logger.info(
-                        f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} {int(int(related_buy_order["price"].values[i]) * (rate-1)) * size}] 売り注文に成功しました！！'
+                        f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} '
+                        + f'{int(int(related_buy_order["price"].values[i]) * (rate-1)) * size}] 売り注文に成功しました！！'
                     )
                     print('================================================================')
 

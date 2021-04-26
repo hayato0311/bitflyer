@@ -1,6 +1,6 @@
-from manage import REF_LOCAL
 import pandas as pd
 
+from manage import REF_LOCAL
 
 if not REF_LOCAL:
     from aws import S3
