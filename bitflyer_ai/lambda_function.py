@@ -448,13 +448,16 @@ def trading(product_code):
         latest_summary=latest_summary
     )
 
-    if int(os.environ.get(product_code, 0)):
-        logger.info(f'[{product_code}] 注文中...')
-        if int(os.environ.get(f'{product_code}_LONG', 0)):
-            ai.long_term()
-        if int(os.environ.get(f'{product_code}_SHORT', 0)):
-            ai.short_term()
-        logger.info(f'[{product_code}] 注文完了')
+    logger.info(f'[{product_code}] 注文中...')
+    if int(os.environ.get(f'{product_code}_LONG', 0)):
+        ai.long_term()
+    if int(os.environ.get(f'{product_code}_SHORT', 0)):
+        ai.short_term()
+
+    logger.info(f'[{product_code}] 注文完了')
+
+    ai.update_child_orders(term='long')
+    ai.update_child_orders(term='short')
 
     logger.info(f'[{product_code}] 利益集計中...')
     ai.update_long_term_profit()
