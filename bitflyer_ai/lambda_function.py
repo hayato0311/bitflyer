@@ -443,7 +443,7 @@ def trading(product_code):
         min_volume_short=float(os.environ.get(f'{product_code}_SHORT_MIN_VOLUME', 1000)),
         max_volume_short=float(os.environ.get(f'{product_code}_SHORT_MAX_VOLUME', 10000)),
         min_volume_long=float(os.environ.get(f'{product_code}_LONG_MIN_VOLUME', 10000)),
-        max_volume_long=float(os.environ.get(f'{product_code}_LONG_MIN_VOLUME', 30000)),
+        max_volume_long=float(os.environ.get(f'{product_code}_LONG_MAX_VOLUME', 30000)),
         time_diff=9,
         latest_summary=latest_summary
     )
