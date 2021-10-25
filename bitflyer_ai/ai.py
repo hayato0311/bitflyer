@@ -263,7 +263,7 @@ class AI:
         elif volume > self.max_volume[term]:
             volume = self.max_volume[term]
 
-        size = volume / self.latest_summary['BUY']['now']['price']
+        size = volume / price
         size = round(size, 3)
 
         if size < self.min_size:
