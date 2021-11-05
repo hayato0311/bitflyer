@@ -8,7 +8,7 @@ import pandas as pd
 
 from bitflyer_api import cancel_child_order, get_child_orders, send_child_order
 from manage import CHILD_ORDERS_DIR, REF_LOCAL
-from utils import df_to_csv, path_exists, read_csv
+from utils import df_to_csv, path_exists, read_csv, rm_file
 
 if not REF_LOCAL:
     from aws import S3
@@ -41,16 +41,18 @@ class AI:
         p_child_orders_dir = p_child_orders_dir.joinpath(self.product_code)
         self.p_child_orders_path = {
             'long': p_child_orders_dir.joinpath('long_term.csv'),
-            'short': p_child_orders_dir.joinpath('short_term.csv')
+            'short': p_child_orders_dir.joinpath('short_term.csv'),
+            'dca': p_child_orders_dir.joinpath('dca.csv')
         }
         self.child_orders = {
             'long': pd.DataFrame(),
-            'short': pd.DataFrame()
+            'short': pd.DataFrame(),
+            'dca': pd.DataFrame(),
         }
 
         self.latest_summary = latest_summary
 
-        for term in ['long', 'short']:
+        for term in ['long', 'short', 'dca']:
             if path_exists(self.p_child_orders_path[term]):
                 self.child_orders[term] = read_csv(
                     str(self.p_child_orders_path[term])
@@ -96,7 +98,11 @@ class AI:
             inplace=True
         )
         # csvファイルを更新
-        df_to_csv(str(self.p_child_orders_path[term]), self.child_orders[term], index=True)
+        if len(self.child_orders[term]) == 0:
+            rm_file(self.p_child_orders_path[term])
+        else:
+            df_to_csv(str(self.p_child_orders_path[term]), self.child_orders[term], index=True)
+
         logger.debug(f'{str(self.p_child_orders_path[term])} が更新されました。')
 
     def load_latest_child_orders(self,
@@ -405,20 +411,20 @@ class AI:
                         child_order_acceptance_id=related_buy_order.index[i],
                     )
 
-    def update_long_term_profit(self):
-        if not self.child_orders['long'].empty:
-            self.child_orders['long']['profit'] = self.child_orders['long']['size'] \
-                * (self.latest_summary['BUY']['now']['price'] - self.child_orders['long']['price']) \
-                - self.child_orders['long']['total_commission_yen']
+    def update_unrealized_profit(self, term):
+        if not self.child_orders[term].empty:
+            self.child_orders[term]['profit'] = self.child_orders[term]['size'] \
+                * (self.latest_summary['BUY']['now']['price'] - self.child_orders[term]['price']) \
+                - self.child_orders[term]['total_commission_yen']
 
-            self.child_orders['long'].loc[self.child_orders['long']
-                                          ['child_order_state'] == 'ACTIVE', 'profit'] = 0
+            self.child_orders[term].loc[self.child_orders[term]
+                                        ['child_order_state'] == 'ACTIVE', 'profit'] = 0
 
-            self.child_orders['long']['cumsum_profit'] = self.child_orders['long']['profit'].cumsum()
+            self.child_orders[term]['cumsum_profit'] = self.child_orders[term]['profit'].cumsum()
 
             # csvファイルを更新
-            df_to_csv(str(self.p_child_orders_path['long']), self.child_orders['long'], index=True)
-            logger.debug(f'{str(self.p_child_orders_path["long"])} が更新されました。')
+            df_to_csv(str(self.p_child_orders_path[term]), self.child_orders[term], index=True)
+            logger.debug(f'{str(self.p_child_orders_path[term])} が更新されました。')
 
     def long_term(self):
         # 最新情報を取得
@@ -492,4 +498,52 @@ class AI:
                 term='short',
                 child_order_cycle='weekly',
                 rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.10))
+            )
+
+    def dca(self, volume, price_rate=1, cycle='monthly'):
+        """ドルコスト平均法(Dollar Cost Averaging)による積立投資
+
+        Args:
+            volume (int)): 購入金額
+            price_rate (float, optional): 現在価格に対する注文価格の割合。 Defaults to 1.
+            cycle (str, optional): 積立頻度。 Defaults to 'monthly'.
+        """
+        # 最新情報を取得
+        self.update_child_orders(term='dca')
+
+        price = int(self.latest_summary['BUY']['now']['price'] * price_rate)
+
+        size = volume / price
+        size = round(size, 3)
+
+        if size < self.min_size:
+            size = self.min_size
+
+        if not self.child_orders['dca'].empty:
+            target_date = self.datetime_references[cycle]
+            latest_trade_date = self.child_orders['dca'].query('child_order_date > @target_date')
+            if len(latest_trade_date) == 1:
+                logger.info(
+                    f'[{self.product_code} DCA {cycle}] すでに注文済みです。'
+                )
+                return
+
+        # ----------------------------------------------------------------
+        # 買い注文
+        # ----------------------------------------------------------------
+        response = send_child_order(
+            self.product_code, 'LIMIT', 'BUY', price=price, size=size
+        )
+        response_json = response.json()
+        if response.status_code == 200:
+            print('================================================================')
+            logger.info(
+                f'[{self.product_code} DCA {cycle} {price} {size} '
+                + f'{response_json["child_order_acceptance_id"]}] 買い注文に成功しました!!'
+            )
+            print('================================================================')
+            self.update_child_orders(
+                term='dca',
+                child_order_acceptance_id=response_json['child_order_acceptance_id'],
+                child_order_cycle=cycle,
             )

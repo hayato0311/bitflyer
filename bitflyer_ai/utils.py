@@ -14,6 +14,13 @@ def path_exists(p_path):
         return s3.key_exists(str(p_path))
 
 
+def rm_file(p_path):
+    if REF_LOCAL:
+        return p_path.unlink()
+    else:
+        return s3.delete_file(str(p_path))
+
+
 def read_csv(p_path):
     if REF_LOCAL:
         return pd.read_csv(p_path)

@@ -71,6 +71,12 @@ class S3:
             else:
                 logger.warning(f'[{dirpath}] ディレクトリの削除に失敗しました。')
 
+    def delete_file(self, object_key):
+        try:
+            self.client.delete_object(Bucket=BUCKET_NAME, Key=object_key)
+        except ClientError:
+            logger.debug(f'{object_key} はすでに存在しません。')
+
 
 def decrypt(encrypted):
     decrypted = boto3.client('kms').decrypt(

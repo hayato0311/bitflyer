@@ -83,6 +83,8 @@ def calc_profit(product_code, child_orders, latest_summary):
         unrealized_profit_all = 0
         if not child_orders['long'].empty:
             unrealized_profit_all += float(child_orders['long']['profit'].sum())
+        if not child_orders['dca'].empty:
+            unrealized_profit_all += float(child_orders['long']['profit'].sum())
         if not child_orders['short'].empty:
             rearlized_profit_all += float(child_orders['short']['profit'].sum())
 
@@ -131,21 +133,23 @@ def calc_profit(product_code, child_orders, latest_summary):
     else:
         rearlized_profit = 0
         unrealized_profit = 0
-        if child_orders['short'].empty:
-            if not child_orders['long'].empty:
-                unrealized_profit = child_orders['long']['cumsum_profit'].values[-1]
-        else:
-            rearlized_profit = child_orders['short']['cumsum_profit'].max()
-            if not child_orders['long'].empty:
-                unrealized_profit = child_orders['long']['cumsum_profit'].values[-1]
 
-                df_active_sell_order = child_orders['short'].query('side == "SELL" and child_order_state == "ACTIVE"')
-                if not df_active_sell_order.empty:
-                    child_order_acceptance_id_list = df_active_sell_order['related_child_order_acceptance_id'].values.tolist()
-                    for child_order_acceptance_id in child_order_acceptance_id_list:
-                        unrealized_profit += (latest_summary['SELL']['now']['price'] - child_orders['short'][child_order_acceptance_id, 'price']) \
-                            * child_orders['short'][child_order_acceptance_id, 'size'] \
-                            - child_orders['short'][child_order_acceptance_id, 'total_commission_yen']
+        if not child_orders['long'].empty:
+            unrealized_profit = child_orders['long']['cumsum_profit'].values[-1]
+
+        if not child_orders['dca'].empty:
+            unrealized_profit += child_orders['dca']['cumsum_profit'].values[-1]
+
+        if not child_orders['short'].empty:
+            rearlized_profit = child_orders['short']['cumsum_profit'].max()
+
+            df_active_sell_order = child_orders['short'].query('side == "SELL" and child_order_state == "ACTIVE"')
+            if not df_active_sell_order.empty:
+                child_order_acceptance_id_list = df_active_sell_order['related_child_order_acceptance_id'].values.tolist()
+                for child_order_acceptance_id in child_order_acceptance_id_list:
+                    unrealized_profit += (latest_summary['SELL']['now']['price'] - child_orders['short'][child_order_acceptance_id, 'price']) \
+                        * child_orders['short'][child_order_acceptance_id, 'size'] \
+                        - child_orders['short'][child_order_acceptance_id, 'total_commission_yen']
 
         rearlized_profit = round(rearlized_profit, 1)
         unrealized_profit = round(unrealized_profit, 1)
@@ -454,13 +458,34 @@ def trading(product_code):
     if int(os.environ.get(f'{product_code}_SHORT', 0)):
         ai.short_term()
 
+    if int(os.environ.get(f'{product_code}_DCA_VOLUME_MONTHLY', 0)) > 0:
+        ai.dca(
+            volume=float(os.environ.get(f'{product_code}_DCA_VOLUME_MONTHLY', 0)),
+            price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_MONTHLY', 1)),
+            cycle='monthly'
+        )
+    if int(os.environ.get(f'{product_code}_DCA_VOLUME_WEEKLY', 0)) > 0:
+        ai.dca(
+            volume=float(os.environ.get(f'{product_code}_DCA_VOLUME_WEEKLY', 0)),
+            price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_WEEKLY', 1)),
+            cycle='weekly'
+        )
+    if int(os.environ.get(f'{product_code}_DCA_VOLUME_DAILY', 0)) > 0:
+        ai.dca(
+            volume=float(os.environ.get(f'{product_code}_DCA_VOLUME_DAILY', 0)),
+            price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_DAILY', 1)),
+            cycle='daily'
+        )
+
     logger.info(f'[{product_code}] 注文完了')
 
     ai.update_child_orders(term='long')
     ai.update_child_orders(term='short')
+    ai.update_child_orders(term='dca')
 
     logger.info(f'[{product_code}] 利益集計中...')
-    ai.update_long_term_profit()
+    ai.update_unrealized_profit(term='long')
+    ai.update_unrealized_profit(term='dca')
     calc_profit(product_code, ai.child_orders, latest_summary)
     logger.info(f'[{product_code}] 利益集計完了')
 
