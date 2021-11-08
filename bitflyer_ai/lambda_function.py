@@ -458,21 +458,24 @@ def trading(product_code):
     if int(os.environ.get(f'{product_code}_SHORT', 0)):
         ai.short_term()
 
-    if int(os.environ.get(f'{product_code}_DCA_VOLUME_MONTHLY', 0)) > 0:
+    if int(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_MONTHLY', 0)) != 0:
         ai.dca(
-            volume=float(os.environ.get(f'{product_code}_DCA_VOLUME_MONTHLY', 0)),
+            min_volume=float(os.environ.get(f'{product_code}_DCA_MIN_VOLUME_MONTHLY', 0)),
+            max_volume=float(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_MONTHLY', 0)),
             price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_MONTHLY', 1)),
             cycle='monthly'
         )
-    if int(os.environ.get(f'{product_code}_DCA_VOLUME_WEEKLY', 0)) > 0:
+    if int(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_WEEKLY', 0)) != 0:
         ai.dca(
-            volume=float(os.environ.get(f'{product_code}_DCA_VOLUME_WEEKLY', 0)),
+            min_volume=float(os.environ.get(f'{product_code}_DCA_MIN_VOLUME_WEEKLY', 0)),
+            max_volume=float(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_WEEKLY', 0)),
             price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_WEEKLY', 1)),
             cycle='weekly'
         )
-    if int(os.environ.get(f'{product_code}_DCA_VOLUME_DAILY', 0)) > 0:
+    if int(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_DAILY', 0)) != 0:
         ai.dca(
-            volume=float(os.environ.get(f'{product_code}_DCA_VOLUME_DAILY', 0)),
+            min_volume=float(os.environ.get(f'{product_code}_DCA_MIN_VOLUME_DAILY', 0)),
+            max_volume=float(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_DAILY', 0)),
             price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_DAILY', 1)),
             cycle='daily'
         )

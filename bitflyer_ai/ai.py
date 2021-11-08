@@ -90,6 +90,7 @@ class AI:
         self.max_buy_prices_rate = {
             'long': float(os.environ.get('MAX_BUY_PRICE_RATE_IN_LONG')),
             'short': float(os.environ.get('MAX_BUY_PRICE_RATE_IN_SHORT')),
+            'dca': float(os.environ.get('MAX_BUY_PRICE_RATE_IN_DCA')),
         }
 
     def _delte_order(self, term, child_order_acceptance_id):
@@ -500,7 +501,7 @@ class AI:
                 rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.10))
             )
 
-    def dca(self, volume, price_rate=1, cycle='monthly'):
+    def dca(self, min_volume, max_volume, price_rate=1, cycle='monthly'):
         """ドルコスト平均法(Dollar Cost Averaging)による積立投資
 
         Args:
@@ -512,6 +513,19 @@ class AI:
         self.update_child_orders(term='dca')
 
         price = int(self.latest_summary['BUY']['now']['price'] * price_rate)
+
+        if min_volume < self.latest_summary['BUY']['now']['price'] * self.min_size:
+            min_volume = int(self.latest_summary['BUY']['now']['price'] * self.min_size)
+
+        if max_volume < min_volume:
+            max_volume = min_volume
+
+        buy_price_rate = price / self.latest_summary['BUY']['all']['price']['high']
+
+        volume = (max_volume - min_volume) / (1 - self.max_buy_prices_rate['dca'])**2 * (1 - buy_price_rate)**2 + min_volume
+
+        if volume > max_volume:
+            volume = max_volume
 
         size = volume / price
         size = round(size, 3)
