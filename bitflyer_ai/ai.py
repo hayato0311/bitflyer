@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from bitflyer_api import cancel_child_order, get_child_orders, send_child_order
+from bitflyer_api import (cancel_child_order, get_balance, get_child_orders,
+                          send_child_order)
 from manage import CHILD_ORDERS_DIR, REF_LOCAL
 from utils import df_to_csv, path_exists, read_csv, rm_file
 
@@ -36,6 +37,9 @@ class AI:
 
         self.product_code = product_code
         self.min_size = min_size
+
+        self.df_balance = get_balance()
+        self.df_balance = self.df_balance.set_index('currency_code', drop=True)
 
         p_child_orders_dir = Path(CHILD_ORDERS_DIR)
         p_child_orders_dir = p_child_orders_dir.joinpath(self.product_code)
@@ -269,12 +273,19 @@ class AI:
             volume = self.min_volume[term]
         elif volume > self.max_volume[term]:
             volume = self.max_volume[term]
+        elif volume > self.df_balance.at['JPY', 'available']:
+            volume = int(self.df_balance.at['JPY', 'available'])
 
         size = volume / price
         size = round(size, 3)
 
         if size < self.min_size:
             size = self.min_size
+
+        if size * price > self.df_balance.at['JPY', 'available']:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {volume}] JPYが不足しているため新規の買い注文ができません。'
+            )
 
         buy_active_same_price = pd.DataFrame()
         target_buy_history = pd.DataFrame()

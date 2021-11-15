@@ -516,23 +516,22 @@ def lambda_handler(event, context):
     # start_date=start_date, end_date=end_date, product_code='ETH_JPY',
     # count=500)
 
-    # # get_ticker()
+    # from bitflyer_api import get_balance
     # df_balance = get_balance()
+    # print(df_balance)
+
+    # # get_ticker()
     # p_balance_log_dir = Path(BALANCE_LOG_DIR)
     # p_balance_log_save_path = p_balance_log_dir.joinpath(
     #     current_datetime.strftime('%Y'), current_datetime.strftime('%m'),
     # )
     # df_balance.to_csv()
-    # print(df_balance)
-
     # df_child_orders = get_child_orders(
     # region='Asia/Tokyo',
     # child_order_acceptance_id='JRF20210302-153421-352775')
-
     # df_child_orders.to_csv('child_orders/ETH_JPY/all.csv')
     # print(df_child_orders)
     # print(df_child_orders['child_order_date'])
-
     # send_child_order('ETH_JPY', 'LIMIT', 'BUY', price=75000, size=0.08)
 
 
