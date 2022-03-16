@@ -271,12 +271,19 @@ class AI:
             volume = self.min_volume[term]
         elif volume > self.max_volume[term]:
             volume = self.max_volume[term]
+        elif volume > self.df_balance.at['JPY', 'available']:
+            volume = int(self.df_balance.at['JPY', 'available'])
 
         size = volume / price
         size = round(size, 3)
 
         if size < self.min_size:
             size = self.min_size
+
+        if size * price > self.df_balance.at['JPY', 'available']:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {volume}] JPYが不足しているため新規の買い注文ができません。'
+            )
 
         buy_active_same_price = pd.DataFrame()
         target_buy_history = pd.DataFrame()
