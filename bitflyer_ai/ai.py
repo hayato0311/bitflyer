@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from bitflyer_api import cancel_child_order, get_child_orders, send_child_order
+from bitflyer_api import (cancel_child_order, get_balance, get_child_orders,
+                          send_child_order)
 from manage import CHILD_ORDERS_DIR, REF_LOCAL
 from utils import df_to_csv, path_exists, read_csv, rm_file
 
@@ -36,6 +37,9 @@ class AI:
 
         self.product_code = product_code
         self.min_size = min_size
+
+        self.df_balance = get_balance()
+        self.df_balance = self.df_balance.set_index('currency_code', drop=True)
 
         p_child_orders_dir = Path(CHILD_ORDERS_DIR)
         p_child_orders_dir = p_child_orders_dir.joinpath(self.product_code)
@@ -230,6 +234,8 @@ class AI:
                 f'[{self.product_code} {term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。'
             )
             print('================================================================')
+            self.df_balance = get_balance()
+            self.df_balance = self.df_balance.set_index('currency_code', drop=True)
         else:
             response_json = response.json()
             logger.error(response_json['error_message'])
@@ -240,13 +246,9 @@ class AI:
         if 1 - local_prices['low'] / global_prices['high'] > 1 / 2:
             price_rate = 1
         else:
-            price_rate = -4 * (1 - self.max_buy_prices_rate[term]) * (
-                1 - local_prices['low'] / global_prices['high']) ** 2 + 1
-            # price_rate = 2 * (1 - self.max_buy_prices_rate[term]) * (
-            #     1 - local_prices['low'] / global_prices['high']) + self.max_buy_prices_rate[term]
-            # price_rate = 4 * (1 - self.max_buy_prices_rate[term]) * (
-            # 1 - local_prices['low'] / global_prices['high']) ** 2 +
-            # self.max_buy_prices_rate[term]
+            price_rate = -4 * (1 - self.max_buy_prices_rate[term]) * (0.5 - local_prices['low'] / global_prices['high']) ** 2 + 1
+            # price_rate = 2 * (1 - self.max_buy_prices_rate[term]) * (0.5 - local_prices['low'] / global_prices['high']) + self.max_buy_prices_rate[term]
+            # price_rate = 4 * (1 - self.max_buy_prices_rate[term]) * (0.5 - local_prices['low'] / global_prices['high']) ** 2 + self.max_buy_prices_rate[term]
 
         price = int(local_prices['low'] * price_rate)
         if price >= global_prices['high'] * self.max_buy_prices_rate[term]:
@@ -284,7 +286,7 @@ class AI:
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
             buy_active_same_price = self.child_orders[term].query(
-                'side == "BUY" and child_order_state == "ACTIVE" and price == @price'
+                'side == "BUY" and child_order_state == "ACTIVE" and price == @price and size == @size'
             )
             target_buy_history = self.child_orders[term].query(
                 'side == "BUY" and child_order_date > @target_datetime and child_order_cycle == @child_order_cycle'
@@ -301,7 +303,7 @@ class AI:
 
         if not buy_active_same_price.empty:
             logger.info(
-                f'[{self.product_code} {term} {child_order_cycle}] 同じ価格での注文がすでにあるため、購入できません。'
+                f'[{self.product_code} {term} {child_order_cycle}] 同じ価格かつ同じサイズでの注文がすでにあるため、購入できません。'
             )
             return
 
@@ -344,10 +346,21 @@ class AI:
                 child_order_acceptance_id=same_category_order.index[0],
                 child_order_type='buy'
             )
-
         # ----------------------------------------------------------------
         # 買い注文
         # ----------------------------------------------------------------
+        if volume > self.df_balance.at['JPY', 'available']:
+            volume = int(self.df_balance.at['JPY', 'available'])
+        size = volume / price
+        size = round(size, 3)
+        if size < self.min_size:
+            size = self.min_size
+
+        if size * price > self.df_balance.at['JPY', 'available']:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {volume}] JPYが不足しているため新規の買い注文ができません。'
+            )
+            return
         response = send_child_order(
             self.product_code, 'LIMIT', 'BUY', price=price, size=size
         )
