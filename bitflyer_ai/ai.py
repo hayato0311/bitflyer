@@ -514,11 +514,12 @@ class AI:
                 rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.10))
             )
 
-    def dca(self, min_volume, max_volume, price_rate=1, cycle='monthly'):
+    def dca(self, min_volume, max_volume, st_buy_price_rate=1, price_rate=1, cycle='monthly'):
         """ドルコスト平均法(Dollar Cost Averaging)による積立投資
 
         Args:
             volume (int)): 購入金額
+            st_buy_price_rate: (float, optional): 過去最高価格に対して購入可能な現在価格の割合。 Defaults to 1.
             price_rate (float, optional): 現在価格に対する注文価格の割合。 Defaults to 1.
             cycle (str, optional): 積立頻度。 Defaults to 'monthly'.
         """
@@ -526,6 +527,12 @@ class AI:
         self.update_child_orders(term='dca')
 
         price = int(self.latest_summary['BUY']['now']['price'] * price_rate)
+
+        if price > self.latest_summary['BUY']['all']['price']['high'] * st_buy_price_rate:
+            logger.info(
+                f"[{self.product_code} DCA {cycle} {price} {self.latest_summary['BUY']['all']['price']['high'] * st_buy_price_rate}] 注文価格が過去最高価格の{st_buy_price_rate}倍以上であるため注文できません。"
+            )
+            return
 
         if min_volume < self.latest_summary['BUY']['now']['price'] * self.min_size:
             min_volume = int(self.latest_summary['BUY']['now']['price'] * self.min_size)

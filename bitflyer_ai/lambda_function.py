@@ -462,6 +462,7 @@ def trading(product_code):
         ai.dca(
             min_volume=float(os.environ.get(f'{product_code}_DCA_MIN_VOLUME_MONTHLY', 0)),
             max_volume=float(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_MONTHLY', 0)),
+            st_buy_price_rate=float(os.environ.get(f'{product_code}_DCA_ST_BUY_PRICE_RATE', 1)),
             price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_MONTHLY', 1)),
             cycle='monthly'
         )
@@ -469,6 +470,7 @@ def trading(product_code):
         ai.dca(
             min_volume=float(os.environ.get(f'{product_code}_DCA_MIN_VOLUME_WEEKLY', 0)),
             max_volume=float(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_WEEKLY', 0)),
+            st_buy_price_rate=float(os.environ.get(f'{product_code}_DCA_ST_BUY_PRICE_RATE', 1)),
             price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_WEEKLY', 1)),
             cycle='weekly'
         )
@@ -476,6 +478,7 @@ def trading(product_code):
         ai.dca(
             min_volume=float(os.environ.get(f'{product_code}_DCA_MIN_VOLUME_DAILY', 0)),
             max_volume=float(os.environ.get(f'{product_code}_DCA_MAX_VOLUME_DAILY', 0)),
+            st_buy_price_rate=float(os.environ.get(f'{product_code}_DCA_ST_BUY_PRICE_RATE', 1)),
             price_rate=float(os.environ.get(f'{product_code}_DCA_PRICE_RATE_DAILY', 1)),
             cycle='daily'
         )
