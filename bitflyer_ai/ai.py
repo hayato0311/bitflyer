@@ -562,6 +562,12 @@ class AI:
                 )
                 return
 
+        if size * price > self.df_balance.at['JPY', 'available']:
+            logger.info(
+                f'[{self.product_code} DCA {cycle} {volume}] JPYが不足しているため新規の買い注文ができません。'
+            )
+            return
+
         # ----------------------------------------------------------------
         # 買い注文
         # ----------------------------------------------------------------
