@@ -498,16 +498,16 @@ def obtain_latest_summary(product_code):
 
     gen_execution_summaries(
         product_code=product_code,
-        year=before_1d_datetime.strftime('%Y'),
-        month=before_1d_datetime.strftime('%m'),
-        day=before_1d_datetime.strftime('%d')
+        year=int(before_1d_datetime.strftime('%Y')),
+        month=int(before_1d_datetime.strftime('%m')),
+        day=int(before_1d_datetime.strftime('%d'))
     )
 
     gen_execution_summaries(
         product_code=product_code,
-        year=current_datetime.strftime('%Y'),
-        month=current_datetime.strftime('%m'),
-        day=current_datetime.strftime('%d')
+        year=int(current_datetime.strftime('%Y')),
+        month=int(current_datetime.strftime('%m')),
+        day=int(current_datetime.strftime('%d'))
     )
 
     # monthly summary
@@ -854,7 +854,7 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                                 logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
                                 return
                 else:
-                    p_day_dir = p_month_dir.joinpath(format(day, '02'))
+                    p_day_dir = p_month_dir.joinpath(format(int(day), '02'))
                     success = make_summary(product_code, p_day_dir, daily=True)
                     if not success:
                         logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
@@ -862,7 +862,7 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                 make_summary(product_code, p_month_dir)
 
     else:
-        p_month_dir = p_year_dir.joinpath(format(month, '02'))
+        p_month_dir = p_year_dir.joinpath(format(int(month), '02'))
         if day == -1:
             if REF_LOCAL:
                 for p_target_day_dir in p_month_dir.glob('*'):
