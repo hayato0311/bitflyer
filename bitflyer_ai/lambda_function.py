@@ -10,7 +10,8 @@ from dateutil.relativedelta import relativedelta
 from ai import AI
 from bitflyer_api import get_board_state
 from manage import PROFIT_DIR, REF_LOCAL, VOLUME_DIR
-from preprocess import delete_row_data, obtain_latest_summary
+from preprocess import (delete_row_data, gen_execution_summaries,
+                        get_executions_history, obtain_latest_summary)
 from utils import df_to_csv, path_exists, read_csv
 
 if REF_LOCAL:
@@ -504,13 +505,30 @@ def lambda_handler(event, context):
 
     product_code_list = [
         'BTC_JPY',
-        'ETH_JPY',
+        # 'ETH_JPY',
         # 'XLM_JPY',
         # 'XRP_JPY',
         # 'MONA_JPY',
     ]
     for product_code in product_code_list:
         trading(product_code=product_code)
+
+        # load data
+        # current_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+        # before_15d_datetime = current_datetime - datetime.timedelta(days=15)
+        # before_16d_datetime = current_datetime - datetime.timedelta(days=16)
+
+        # get_executions_history(
+        #     product_code=product_code,
+        #     start_date=before_16d_datetime,
+        #     end_date=before_15d_datetime,
+        #     return_df=False
+        # )
+        # gen_execution_summaries(
+        #     product_code=product_code,
+        #     year=2022,
+        #     month=3,
+        # )
 
     # =============================================================
 
