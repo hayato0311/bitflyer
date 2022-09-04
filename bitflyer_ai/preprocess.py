@@ -542,10 +542,7 @@ def obtain_latest_summary(product_code):
     # weekly summary
     target_weekly_summary_path_list = []
     for i in range(8):
-        if i == 0:
-            target_datetime = current_datetime
-        else:
-            target_datetime = current_datetime - datetime.timedelta(days=i)
+        target_datetime = current_datetime - datetime.timedelta(days=i)
         p_target_weekly_summary_path = p_exe_history_dir.joinpath(
             product_code,
             target_datetime.strftime('%Y'),
@@ -565,25 +562,15 @@ def obtain_latest_summary(product_code):
     )
 
     # yearly summary
-    before_365d_datetime = current_datetime - datetime.timedelta(days=365)
-    p_target_yearly_summary_path_list = [
-        p_exe_history_dir.joinpath(
+    target_yearly_summary_path_list = []
+    for i in range(13):
+        target_datetime = current_datetime + relativedelta(months=-i)
+        p_target_yearly_summary_path = p_exe_history_dir.joinpath(
             product_code,
-            current_datetime.strftime('%Y'),
-            current_datetime.strftime('%m'),
-            current_datetime.strftime('%d'),
-            'summary.csv'
-        ),
-        p_exe_history_dir.joinpath(
-            product_code,
-            before_365d_datetime.strftime('%Y'),
-            before_365d_datetime.strftime('%m'),
-            before_365d_datetime.strftime('%d'),
+            target_datetime.strftime('%Y'),
+            target_datetime.strftime('%m'),
             'summary.csv'
         )
-    ]
-    target_yearly_summary_path_list = []
-    for p_target_yearly_summary_path in p_target_yearly_summary_path_list:
         if path_exists(p_target_yearly_summary_path):
             target_yearly_summary_path_list.append(
                 str(p_target_yearly_summary_path)
