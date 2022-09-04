@@ -478,7 +478,7 @@ class AI:
             self._buy(
                 term='short',
                 child_order_cycle='hourly',
-                local_prices=self.latest_summary['BUY']['6h']['price']
+                local_prices=self.latest_summary['BUY']['12h']['price']
             )
 
             self._sell(

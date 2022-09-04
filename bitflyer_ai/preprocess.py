@@ -493,6 +493,10 @@ def obtain_latest_summary(product_code):
     df_buy_6h = df_buy_resampled.query('index > @before_6h_datetime')
     df_sell_6h = df_sell_resampled.query('index > @before_6h_datetime')
 
+    before_12h_datetime = current_datetime - datetime.timedelta(hours=12)
+    df_buy_12h = df_buy_resampled.query('index > @before_12h_datetime')
+    df_sell_12h = df_sell_resampled.query('index > @before_12h_datetime')
+
     df_buy_1d = df_buy_resampled.query('index > @before_1d_datetime')
     df_sell_1d = df_sell_resampled.query('index > @before_1d_datetime')
 
@@ -601,6 +605,15 @@ def obtain_latest_summary(product_code):
                 },
                 'trend': 'DOWN',
             },
+            '12h': {
+                'price': {
+                    'open': df_buy_12h['open_price'].values[0],
+                    'high': df_buy_12h['high_price'].max(),
+                    'low': df_buy_12h['low_price'].min(),
+                    'close': df_buy_12h['close_price'].values[-1],
+                },
+                'trend': 'DOWN',
+            },
             '1d': {
                 'price': {
                     'open': df_buy_1d['open_price'].values[0],
@@ -657,6 +670,15 @@ def obtain_latest_summary(product_code):
                     'high': df_sell_6h['high_price'].max(),
                     'low': df_sell_6h['low_price'].min(),
                     'close': df_sell_6h['close_price'].values[-1],
+                },
+                'trend': 'DOWN',
+            },
+            '12h': {
+                'price': {
+                    'open': df_sell_12h['open_price'].values[0],
+                    'high': df_sell_12h['high_price'].max(),
+                    'low': df_sell_12h['low_price'].min(),
+                    'close': df_sell_12h['close_price'].values[-1],
                 },
                 'trend': 'DOWN',
             },
