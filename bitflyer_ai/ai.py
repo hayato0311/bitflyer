@@ -282,7 +282,7 @@ class AI:
         target_buy_history = pd.DataFrame()
         target_buy_history_active = pd.DataFrame()
         target_buy_history_completed = pd.DataFrame()
-        same_category_order = pd.DataFrame()
+        same_category_buy_order = pd.DataFrame()
         target_datetime = self.datetime_references[child_order_cycle]
         if not self.child_orders[term].empty:
             buy_active_same_price = self.child_orders[term].query(
@@ -297,8 +297,11 @@ class AI:
             target_buy_history_completed = target_buy_history.query(
                 'child_order_state == "COMPLETED"'
             )
-            same_category_order = self.child_orders[term].query(
+            same_category_buy_order = self.child_orders[term].query(
                 'side == "BUY" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle'
+            ).copy()
+            same_category_sell_order = self.child_orders[term].query(
+                'side == "SELL" and child_order_state == "ACTIVE" and child_order_cycle == @child_order_cycle'
             ).copy()
 
         if not buy_active_same_price.empty:
@@ -313,21 +316,26 @@ class AI:
             )
             return
 
-        if same_category_order.empty:
+        if not same_category_sell_order.empty:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle}] 同じサイクルを持つACTIVEな売り注文が存在するため、新規の買い注文はできません。'
+            )
+            return
+        elif same_category_buy_order.empty:
             logger.info(
                 f'[{self.product_code} {term} {child_order_cycle}] 同じサイクルを持つACTIVEな買い注文が存在しないため、買い注文を行います。'
             )
         else:
-            if len(same_category_order) >= 2:
+            if len(same_category_buy_order) >= 2:
                 logger.error(
                     f'[{term} {child_order_cycle}]同じサイクルを持つACTIVEな買い注文が2つ以上あります。'
                 )
             if target_buy_history_active.empty:
                 logger.info(
-                    f'[{self.product_code} {term} {child_order_cycle} {same_category_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、買い注文を更新します。'
+                    f'[{self.product_code} {term} {child_order_cycle} {same_category_buy_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、買い注文を更新します。'
                 )
             else:
-                if price == same_category_order['price'].values[0]:
+                if price == same_category_buy_order['price'].values[0]:
                     logger.info(
                         f'[{self.product_code} {term} {child_order_cycle}] すでに注文済みのため、購入できません。'
                     )
@@ -338,12 +346,12 @@ class AI:
                     )
 
             logger.info(
-                f'[{self.product_code} {term} {child_order_cycle} {same_category_order["price"].values[0]} {same_category_order["size"].values[0]}] 買い注文をキャンセルします。'
+                f'[{self.product_code} {term} {child_order_cycle} {same_category_buy_order["price"].values[0]} {same_category_buy_order["size"].values[0]}] 買い注文をキャンセルします。'
             )
             self._cancel(
                 term=term,
                 child_order_cycle=child_order_cycle,
-                child_order_acceptance_id=same_category_order.index[0],
+                child_order_acceptance_id=same_category_buy_order.index[0],
                 child_order_type='buy'
             )
         # ----------------------------------------------------------------
