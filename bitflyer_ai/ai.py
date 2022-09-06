@@ -386,7 +386,7 @@ class AI:
                 child_order_cycle=child_order_cycle,
             )
 
-    def _sell(self, term, child_order_cycle, rate):
+    def _sell(self, term, child_order_cycle, price):
         if self.child_orders[term].empty:
             logger.info(
                 f'[{self.product_code} {term} {child_order_cycle}] 買い注文がないため、売り注文はできません。'
@@ -405,9 +405,9 @@ class AI:
                     f'[{self.product_code} {term} {child_order_cycle}] 同じフラグを持つ約定済みの買い注文が2つ以上あります。'
                 )
             for i in range(len(related_buy_order)):
-                price = int(int(related_buy_order['price'].values[i]) * rate)
-                if price < self.latest_summary['SELL']['6h']['price']['high']:
-                    price = self.latest_summary['SELL']['6h']['price']['high']
+                # price = int(int(related_buy_order['price'].values[i]) * rate)
+                # if price < self.latest_summary['SELL']['6h']['price']['high']:
+                #     price = self.latest_summary['SELL']['6h']['price']['high']
                 size = round(float(related_buy_order['size'].values[i]), 3)
                 response = send_child_order(self.product_code, 'LIMIT', 'SELL',
                                             price=price, size=size)
@@ -416,7 +416,7 @@ class AI:
                     print('================================================================')
                     logger.info(
                         f'[{self.product_code} {term} {child_order_cycle} {price} {size} {response_json["child_order_acceptance_id"]} '
-                        + f'{int(int(related_buy_order["price"].values[i]) * (rate-1)) * size}] 売り注文に成功しました！！'
+                        + f'{price * size}] 売り注文に成功しました！！'
                     )
                     print('================================================================')
 
@@ -492,7 +492,8 @@ class AI:
             self._sell(
                 term='short',
                 child_order_cycle='hourly',
-                rate=float(os.environ.get('SELL_RATE_SHORT_HOURLY', 1.10))
+                # rate=float(os.environ.get('SELL_RATE_SHORT_HOURLY', 1.10)),
+                price=self.latest_summary['SELL']['12h']['price']['high']
             )
 
         if int(os.environ.get('SHORT_DAILY', 0)):
@@ -506,7 +507,8 @@ class AI:
             self._sell(
                 term='short',
                 child_order_cycle='daily',
-                rate=float(os.environ.get('SELL_RATE_SHORT_DAILY', 1.10))
+                # rate=float(os.environ.get('SELL_RATE_SHORT_DAILY', 1.10)),
+                price=self.latest_summary['SELL']['1d']['price']['high']
             )
 
         if int(os.environ.get('SHORT_WEEKLY', 0)):
@@ -519,7 +521,8 @@ class AI:
             self._sell(
                 term='short',
                 child_order_cycle='weekly',
-                rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.10))
+                # rate=float(os.environ.get('SELL_RATE_SHORT_WEEKLY', 1.10)),
+                price=self.latest_summary['SELL']['1w']['price']['high']
             )
 
     def dca(self, min_volume, max_volume, st_buy_price_rate=1, price_rate=1, cycle='monthly'):
