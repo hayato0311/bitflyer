@@ -243,12 +243,15 @@ class AI:
 
     def _buy(self, term, child_order_cycle, local_prices):
         global_prices = self.latest_summary['BUY']['all']['price']
-        if 1 - local_prices['low'] / global_prices['high'] > 1 / 2:
+        local_global_price_rate = local_prices['low'] / global_prices['high']
+        max_price_rate_th = 1 / 2
+
+        if 1 - local_global_price_rate > max_price_rate_th:
             price_rate = 1
         else:
-            price_rate = -4 * (1 - self.max_buy_prices_rate[term]) * (0.5 - local_prices['low'] / global_prices['high']) ** 2 + 1
-            # price_rate = 2 * (1 - self.max_buy_prices_rate[term]) * (0.5 - local_prices['low'] / global_prices['high']) + self.max_buy_prices_rate[term]
-            # price_rate = 4 * (1 - self.max_buy_prices_rate[term]) * (0.5 - local_prices['low'] / global_prices['high']) ** 2 + self.max_buy_prices_rate[term]
+            price_rate = -4 * (1 - self.max_buy_prices_rate[term]) * (max_price_rate_th - local_global_price_rate) ** 2 + 1
+            # price_rate = 2 * (1 - self.max_buy_prices_rate[term]) * (max_price_rate_th - local_global_price_rate) + self.max_buy_prices_rate[term]
+            # price_rate = 4 * (1 - self.max_buy_prices_rate[term]) * (max_price_rate_th - local_global_price_rate) ** 2 + self.max_buy_prices_rate[term]
 
         price = int(local_prices['low'] * price_rate)
         if price >= global_prices['high'] * self.max_buy_prices_rate[term]:
@@ -265,12 +268,22 @@ class AI:
         # size_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
         # size = self.min_size[term] * size_rate
 
-        volume_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
-        volume = self.min_volume[term] * volume_rate
-        if volume < self.min_volume[term]:
-            volume = self.min_volume[term]
-        elif volume > self.max_volume[term]:
+        # volume_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
+        # volume = self.min_volume[term] * volume_rate
+
+        # if volume < self.min_volume[term]:
+        #     volume = self.min_volume[term]
+        # elif volume > self.max_volume[term]:
+        #     volume = self.max_volume[term]
+
+        # 最大volumeで注文する際の過去最大価格に対する注文価格の割合
+        max_volume_rate = 0.5
+
+        if (price / global_prices['high']) <= max_volume_rate:
             volume = self.max_volume[term]
+        else:
+            volume = - ((self.max_volume[term] - self.min_volume[term]) / (self.max_buy_prices_rate[term] - max_volume_rate)) * \
+                ((price / global_prices['high']) - max_volume_rate) + self.max_volume[term]
 
         size = volume / price
         size = round(size, 3)
