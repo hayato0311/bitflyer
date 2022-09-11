@@ -833,7 +833,7 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                                 logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
                                 return
                 else:
-                    p_day_dir = p_month_dir.joinpath(str(day))
+                    p_day_dir = p_month_dir.joinpath(format(int(day), '02'))
                     success = make_summary(product_code, p_day_dir, daily=True)
                     if not success:
                         logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
@@ -895,7 +895,7 @@ def gen_execution_summaries(product_code, year=2021, month=-1, day=-1):
                             logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')
                             return
         else:
-            p_day_dir = p_month_dir.joinpath(str(day))
+            p_day_dir = p_month_dir.joinpath(format(int(day), '02'))
             success = make_summary(product_code, p_day_dir, daily=True)
             if not success:
                 logger.debug(f'[{p_day_dir}] データが存在しないため、集計を作成できませんでした。')

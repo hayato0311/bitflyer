@@ -555,6 +555,17 @@ def lambda_handler(event, context):
     # print(df_child_orders['child_order_date'])
     # send_child_order('ETH_JPY', 'LIMIT', 'BUY', price=75000, size=0.08)
 
+    # gen summary
+    # current_datetime = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    # for i in range(12):
+    #     target_datetime = current_datetime - datetime.timedelta(days=i)
+    #     gen_execution_summaries(
+    #         product_code=product_code,
+    #         year=int(target_datetime.strftime('%Y')),
+    #         month=int(target_datetime.strftime('%m')),
+    #         day=int(target_datetime.strftime('%d'))
+    #     )
+
 
 if __name__ == '__main__':
     lambda_handler('', '')
