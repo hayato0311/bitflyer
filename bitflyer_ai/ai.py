@@ -286,12 +286,21 @@ class AI:
             volume = - ((self.max_volume[term] - self.min_volume[term]) / (self.max_buy_prices_rate[term] - max_volume_rate)) * \
                 ((price / global_prices['high']) - max_volume_rate) + self.max_volume[term]
 
+        if volume > self.df_balance.at['JPY', 'available']:
+            volume = int(self.df_balance.at['JPY', 'available'])
+
         size = volume / price
         sig_digits = 3
         size = math.floor(size * 10 ** sig_digits) / (10 ** sig_digits)
 
         if size < self.min_size:
             size = self.min_size
+
+        if size * price > self.df_balance.at['JPY', 'available']:
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {volume}] JPYが不足しているため新規の買い注文ができません。'
+            )
+            return
 
         buy_active_same_price = pd.DataFrame()
         target_buy_history = pd.DataFrame()
@@ -372,18 +381,6 @@ class AI:
         # ----------------------------------------------------------------
         # 買い注文
         # ----------------------------------------------------------------
-        if volume > self.df_balance.at['JPY', 'available']:
-            volume = int(self.df_balance.at['JPY', 'available'])
-        size = volume / price
-        size = round(size, 3)
-        if size < self.min_size:
-            size = self.min_size
-
-        if size * price > self.df_balance.at['JPY', 'available']:
-            logger.info(
-                f'[{self.product_code} {term} {child_order_cycle} {volume}] JPYが不足しているため新規の買い注文ができません。'
-            )
-            return
         response = send_child_order(
             self.product_code, 'LIMIT', 'BUY', price=price, size=size
         )
@@ -574,7 +571,8 @@ class AI:
             volume = max_volume
 
         size = volume / price
-        size = round(size, 3)
+        sig_digits = 3
+        size = math.floor(size * 10 ** sig_digits) / (10 ** sig_digits)
 
         if size < self.min_size:
             size = self.min_size
