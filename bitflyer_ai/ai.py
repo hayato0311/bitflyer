@@ -1,4 +1,5 @@
 import datetime
+import math
 import os
 import time
 from logging import getLogger
@@ -286,7 +287,8 @@ class AI:
                 ((price / global_prices['high']) - max_volume_rate) + self.max_volume[term]
 
         size = volume / price
-        size = round(size, 3)
+        sig_digits = 3
+        size = math.floor(size * 10 ** sig_digits) / (10 ** sig_digits)
 
         if size < self.min_size:
             size = self.min_size
