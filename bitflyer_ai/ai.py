@@ -132,7 +132,16 @@ class AI:
                     term=term,
                     child_order_acceptance_id=child_order_acceptance_id
                 )
-                return
+                if child_orders_tmp['side'] == "SELL":
+                    child_order_acceptance_id = child_orders_tmp['related_child_order_acceptance_id']
+                    related_child_order_acceptance_id = 'no_id'
+                    child_orders_tmp = get_child_orders(
+                        product_code=self.product_code,
+                        region='Asia/Tokyo',
+                        child_order_acceptance_id=child_order_acceptance_id
+                    )
+                else:
+                    return
 
         child_orders_tmp['child_order_cycle'] = child_order_cycle
         child_orders_tmp['related_child_order_acceptance_id'] = related_child_order_acceptance_id
