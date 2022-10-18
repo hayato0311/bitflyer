@@ -103,7 +103,8 @@ class AI:
             'dca': float(os.environ.get('MAX_BUY_PRICE_RATE_IN_DCA')),
         }
 
-    def _delte_order(self, term, child_order_acceptance_id):
+    def _delete_order(self, term, child_order_acceptance_id):
+        target_record = self.child_orders[term][child_order_acceptance_id]
         self.child_orders[term].drop(
             index=[child_order_acceptance_id],
             inplace=True
@@ -115,6 +116,7 @@ class AI:
             df_to_csv(str(self.p_child_orders_path[term]), self.child_orders[term], index=True)
 
         logger.debug(f'{str(self.p_child_orders_path[term])} が更新されました。')
+        return target_record
 
     def load_latest_child_orders(self,
                                  term,
@@ -133,7 +135,7 @@ class AI:
             )
             if time.time() - start_time > 5:
                 logger.warning(f'{child_order_acceptance_id} はすでに存在しないため、ファイルから削除します。')
-                self._delte_order(
+                child_orders_tmp = self._delete_order(
                     term=term,
                     child_order_acceptance_id=child_order_acceptance_id
                 )
@@ -243,7 +245,7 @@ class AI:
             child_order_acceptance_id=child_order_acceptance_id
         )
         if response.status_code == 200:
-            self._delte_order(term, child_order_acceptance_id)
+            self._delete_order(term, child_order_acceptance_id)
             print('================================================================')
             logger.info(
                 f'[{self.product_code} {term} {child_order_cycle}  {child_order_type} {child_order_acceptance_id}] のキャンセルに成功しました。'
