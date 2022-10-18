@@ -32,12 +32,15 @@ class AI:
                  min_volume_long=10000,
                  max_volume_short=10000,
                  max_volume_long=30000,
+                 min_reward_rate=0.01,
                  time_diff=9,
                  region='Asia/Tokyo',
                  bucket_name=''):
 
         self.product_code = product_code
         self.min_size = min_size
+
+        self.min_reward_rate = min_reward_rate
 
         self.df_balance = get_balance()
         self.df_balance = self.df_balance.set_index('currency_code', drop=True)
@@ -274,6 +277,11 @@ class AI:
                 f'[{self.product_code} {term} {child_order_cycle} {price}] 注文価格が低すぎるため、購入できません。'
             )
             return
+        elif price > local_prices['high'] * (1 - self.min_reward_rate):
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_reward_rate)}] 注文価格が直近の最高価格と近すぎるため、購入できません。'
+            )
+            return
 
         # size_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
         # size = self.min_size[term] * size_rate
@@ -429,6 +437,11 @@ class AI:
                 # price = int(int(related_buy_order['price'].values[i]) * rate)
                 # if price < self.latest_summary['SELL']['6h']['price']['high']:
                 #     price = self.latest_summary['SELL']['6h']['price']['high']
+                if price <= related_buy_order['price'] * (1 + self.min_reward_rate):
+                    logger.info(
+                        f'[{self.product_code} {term} {child_order_cycle} {price} {related_buy_order["price"]}] 売値が買値よりも低いため、売り注文はできません。'
+                    )
+                    return
                 size = round(float(related_buy_order['size'].values[i]), 3)
                 response = send_child_order(self.product_code, 'LIMIT', 'SELL',
                                             price=price, size=size)
