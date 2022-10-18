@@ -284,6 +284,11 @@ class AI:
                 f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_price_gap_rate)}] 注文価格が直近の最高価格と近すぎるため、購入できません。'
             )
             return
+        elif local_prices['high'] / local_prices['low'] < (1 + self.min_price_gap_rate):
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_price_gap_rate)}] 直近の最高価格と最低価格のギャップが小さすぎるため、購入できません。'
+            )
+            return
 
         # size_rate = 100 * (self.max_buy_prices_rate[term] - price / global_prices['high']) ** 2 + 1
         # size = self.min_size[term] * size_rate
