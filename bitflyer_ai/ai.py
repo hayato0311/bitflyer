@@ -104,7 +104,7 @@ class AI:
         }
 
     def _delete_order(self, term, child_order_acceptance_id):
-        target_record = self.child_orders[term][child_order_acceptance_id]
+        target_record = self.child_orders[term].loc[child_order_acceptance_id]
         self.child_orders[term].drop(
             index=[child_order_acceptance_id],
             inplace=True
