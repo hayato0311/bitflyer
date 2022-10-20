@@ -33,7 +33,7 @@ class AI:
                  max_volume_short=10000,
                  max_volume_long=30000,
                  min_reward_rate=0.01,
-                 min_price_gap_rate=0.03,
+                 min_local_price_gap_rate=0.03,
                  time_diff=9,
                  region='Asia/Tokyo',
                  bucket_name=''):
@@ -42,7 +42,7 @@ class AI:
         self.min_size = min_size
 
         self.min_reward_rate = min_reward_rate
-        self.min_price_gap_rate = min_price_gap_rate
+        self.min_local_price_gap_rate = min_local_price_gap_rate
 
         self.df_balance = get_balance()
         self.df_balance = self.df_balance.set_index('currency_code', drop=True)
@@ -281,14 +281,14 @@ class AI:
                 f'[{self.product_code} {term} {child_order_cycle} {price}] 注文価格が低すぎるため、購入できません。'
             )
             return
-        elif price > local_prices['high'] * (1 - self.min_price_gap_rate):
+        elif price > local_prices['high'] * (1 - self.min_local_price_gap_rate):
             logger.info(
-                f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_price_gap_rate)}] 注文価格が直近の最高価格と近すぎるため、購入できません。'
+                f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_local_price_gap_rate)}] 注文価格が直近の最高価格と近すぎるため、購入できません。'
             )
             return
-        elif local_prices['high'] / local_prices['low'] < (1 + self.min_price_gap_rate):
+        elif local_prices['high'] / local_prices['low'] < (1 + self.min_local_price_gap_rate):
             logger.info(
-                f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_price_gap_rate)}] 直近の最高価格と最低価格のギャップが小さすぎるため、購入できません。'
+                f'[{self.product_code} {term} {child_order_cycle} {price} {local_prices["high"] * (1 - self.min_local_price_gap_rate)}] 直近の最高価格と最低価格のギャップが小さすぎるため、購入できません。'
             )
             return
 
