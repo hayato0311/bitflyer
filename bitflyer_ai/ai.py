@@ -446,7 +446,7 @@ class AI:
                 # price = int(int(related_buy_order['price'].values[i]) * rate)
                 # if price < self.latest_summary['SELL']['6h']['price']['high']:
                 #     price = self.latest_summary['SELL']['6h']['price']['high']
-                if price <= related_buy_order['price'] * (1 + self.min_reward_rate):
+                if price <= related_buy_order['price'].values[i] * (1 + self.min_reward_rate):
                     logger.info(
                         f'[{self.product_code} {term} {child_order_cycle} {price} {related_buy_order["price"]}] 売値が買値よりも低いため、売り注文はできません。'
                     )
