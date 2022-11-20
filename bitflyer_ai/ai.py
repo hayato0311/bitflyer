@@ -569,11 +569,11 @@ class AI:
             )
 
     def dca(self, min_volume, max_volume, st_buy_price_rate=1, price_rate=1, cycle='monthly'):
-        """ドルコスト平均法(Dollar Cost Averaging)による積立投資
+        """フレキシブルドルコスト平均法(Flexible Dollar Cost Averaging)による積立投資
 
         Args:
             volume (int)): 購入金額
-            st_buy_price_rate: (float, optional): 過去最高価格に対して購入可能な現在価格の割合。 Defaults to 1.
+            st_buy_price_rate: (float, optional): 購入開始となる、過去最高価格に対する現在価格の割引率。 Defaults to 1.
             price_rate (float, optional): 現在価格に対する注文価格の割合。 Defaults to 1.
             cycle (str, optional): 積立頻度。 Defaults to 'monthly'.
         """
@@ -594,9 +594,16 @@ class AI:
         if max_volume < min_volume:
             max_volume = min_volume
 
-        buy_price_rate = price / self.latest_summary['BUY']['all']['price']['high']
+        current_price_discount_rate = price / self.latest_summary['BUY']['all']['price']['high']
 
-        volume = (max_volume - min_volume) / (1 - self.max_buy_prices_rate['dca'])**2 * (1 - buy_price_rate)**2 + min_volume
+        # x = current_price_discount_rate
+        # coef = (max_volume - min_volume) / (1 - self.max_buy_prices_rate['dca'])**2
+        # volume = coef * (1 - current_price_discount_rate)**2 + min_volume
+        #        = (max_volume - min_volume) / (1 - self.max_buy_prices_rate['dca'])**2 * (1 - current_price_discount_rate)**2 + min_volume
+
+        x = current_price_discount_rate
+        coef = (max_volume - min_volume) / (self.max_buy_prices_rate['dca'] - st_buy_price_rate)**2
+        volume = coef * (x - st_buy_price_rate)**2 + min_volume
 
         if volume > max_volume:
             volume = max_volume
