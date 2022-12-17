@@ -6,7 +6,6 @@ from logging import getLogger
 from pathlib import Path
 
 import pandas as pd
-
 from bitflyer_api import (cancel_child_order, get_balance, get_child_orders,
                           send_child_order)
 from manage import CHILD_ORDERS_DIR, REF_LOCAL
@@ -338,6 +337,9 @@ class AI:
             buy_active_same_price = self.child_orders[term].query(
                 'side == "BUY" and child_order_state == "ACTIVE" and price == @price and size == @size'
             )
+            not_saled_buy_order = self.child_orders[term].query(
+                'side == "BUY" and child_order_state == "COMPLETED" and related_child_order_acceptance_id == "no_id"'
+            )
             target_buy_history = self.child_orders[term].query(
                 'side == "BUY" and child_order_date > @target_datetime and child_order_cycle == @child_order_cycle'
             )
@@ -357,6 +359,12 @@ class AI:
         if not buy_active_same_price.empty:
             logger.info(
                 f'[{self.product_code} {term} {child_order_cycle}] 同じ価格かつ同じサイズでの注文がすでにあるため、購入できません。'
+            )
+            return
+
+        if not not_saled_buy_order.empty and term == 'short':
+            logger.info(
+                f'[{self.product_code} {term} {child_order_cycle}] 以前の買い注文に対する売り注文が完了していないため、新規の買い注文はできません。'
             )
             return
 
