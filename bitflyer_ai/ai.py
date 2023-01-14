@@ -458,7 +458,7 @@ class AI:
                     logger.info(
                         f'[{self.product_code} {term} {child_order_cycle} {price} {related_buy_order["price"]}] 売値が買値よりも低いため、売り注文はできません。'
                     )
-                    return
+                    continue
                 size = round(float(related_buy_order['size'].values[i]), 3)
                 response = send_child_order(self.product_code, 'LIMIT', 'SELL',
                                             price=price, size=size)
