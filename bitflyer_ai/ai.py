@@ -179,14 +179,14 @@ class AI:
                     f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
                 )
                 self.line_notify.notify(
-                    "約定しました\n"
-                    + f"term:{term}\n"
-                    + f"child_order_cycle:{child_order_cycle}\n"
-                    + f"order_price:{price}\n"
-                    + f"price_discount_rate:{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
-                    + f"size:{self.child_orders[term].at[child_order_acceptance_id, 'size']}\n"
-                    + f"volume:{self.child_orders[term].at[child_order_acceptance_id, 'volume']}\n"
-                    + f"child_order_acceptance_id: {child_order_acceptance_id}"
+                    "\n【約定しました】\n"
+                    + f"term:\n{term}\n"
+                    + f"child_order_cycle:\n{child_order_cycle}\n"
+                    + f"order_price:\n{price}\n"
+                    + f"price_discount_rate:\n{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
+                    + f"size:\n{self.child_orders[term].at[child_order_acceptance_id, 'size']}\n"
+                    + f"volume:\n{self.child_orders[term].at[child_order_acceptance_id, 'volume']}\n"
+                    + f"child_order_acceptance_id:\n{child_order_acceptance_id}"
                 )
 
             if self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
@@ -448,14 +448,14 @@ class AI:
                 child_order_cycle=child_order_cycle,
             )
             self.line_notify.notify(
-                f"{self.product_code}の買い注文を行いました\n"
-                + f"term:{term}\n"
-                + f"child_order_cycle:{child_order_cycle}\n"
-                + f"order_price:{price}\n"
-                + f"price_discount_rate:{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
-                + f"size:{size}\n"
-                + f"volume:{price*size}\n"
-                + f"child_order_acceptance_id: {response_json['child_order_acceptance_id']}"
+                f"\n{self.product_code}の買い注文を行いました\n"
+                + f"term:\n{term}\n"
+                + f"child_order_cycle:\n{child_order_cycle}\n"
+                + f"order_price:\n{price}\n"
+                + f"price_discount_rate:\n{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
+                + f"size:\n{size}\n"
+                + f"volume:\n{price*size}\n"
+                + f"child_order_acceptance_id:\n{response_json['child_order_acceptance_id']}"
             )
 
     def _sell(self, term, child_order_cycle, price):
@@ -510,14 +510,14 @@ class AI:
                         child_order_acceptance_id=related_buy_order.index[i],
                     )
                     self.line_notify.notify(
-                        f"{self.product_code}の売り注文を行いました\n"
-                        + f"term:{term}\n"
-                        + f"child_order_cycle:{child_order_cycle}\n"
-                        + f"order_price:{price}\n"
-                        + f"price_discount_rate:{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
-                        + f"size:{size}\n"
-                        + f"volume:{price*size}\n"
-                        + f"child_order_acceptance_id: {response_json['child_order_acceptance_id']}"
+                        f"\n{self.product_code}の売り注文を行いました\n"
+                        + f"term:\n{term}\n"
+                        + f"child_order_cycle:\n{child_order_cycle}\n"
+                        + f"order_price:\n{price}\n"
+                        + f"price_discount_rate:\n{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
+                        + f"size:\n{size}\n"
+                        + f"volume:\n{price*size}\n"
+                        + f"child_order_acceptance_id:\n{response_json['child_order_acceptance_id']}"
                     )
 
     def update_unrealized_profit(self, term):
