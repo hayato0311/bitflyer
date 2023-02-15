@@ -142,6 +142,12 @@ class AI:
                     term=term,
                     child_order_acceptance_id=child_order_acceptance_id
                 )
+                self.line_notify.notify(
+                    "\n【注文が手動で削除されました】\n"
+                    + f"term:\n{term}\n"
+                    + f"child_order_cycle:\n{child_order_cycle}\n"
+                    + f"child_order_acceptance_id:\n{child_order_acceptance_id}"
+                )
                 if child_orders_tmp['side'] == "SELL":
                     child_order_acceptance_id = child_orders_tmp['related_child_order_acceptance_id']
                     related_child_order_acceptance_id = 'no_id'
@@ -271,6 +277,13 @@ class AI:
         else:
             response_json = response.json()
             logger.error(response_json['error_message'])
+            self.line_notify.notify(
+                f"\n【{self.product_code} のキャンセルに失敗しました】\n"
+                + f"reason:\n{response_json['error_message']}\n"
+                + f"term:\n{term}\n"
+                + f"child_order_cycle:\n{child_order_cycle}\n"
+                + f"child_order_acceptance_id:\n{child_order_acceptance_id}"
+            )
             raise Exception("Cancel of buying order was failed")
 
     def _buy(self, term, child_order_cycle, local_prices):
@@ -408,6 +421,13 @@ class AI:
                 logger.info(
                     f'[{self.product_code} {term} {child_order_cycle} {same_category_buy_order.index[0]}] 前回の注文からサイクル時間以上の間約定しなかったため、買い注文を更新します。'
                 )
+                self.line_notify.notify(
+                    f"\n【{self.product_code} の買い注文をキャンセルしました】\n"
+                    + "reason:\n前回の注文からサイクル時間以上の間約定しなかったため\n"
+                    + f"term:\n{term}\n"
+                    + f"child_order_cycle:\n{child_order_cycle}\n"
+                    + f"child_order_acceptance_id:\n{same_category_buy_order.index[0]}"
+                )
             else:
                 if price == same_category_buy_order['price'].values[0]:
                     logger.info(
@@ -417,6 +437,13 @@ class AI:
                 else:
                     logger.info(
                         f'[{self.product_code} {term} {child_order_cycle}] 価格が変動したため、買い注文を更新します。'
+                    )
+                    self.line_notify.notify(
+                        f"\n【{self.product_code} の買い注文をキャンセルしました】\n"
+                        + "reason:\n適正注文価格が変動したため\n"
+                        + f"term:\n{term}\n"
+                        + f"child_order_cycle:\n{child_order_cycle}\n"
+                        + f"child_order_acceptance_id:\n{same_category_buy_order.index[0]}"
                     )
 
             logger.info(
@@ -456,6 +483,15 @@ class AI:
                 + f"size:\n{size}\n"
                 + f"volume:\n{price*size}\n"
                 + f"child_order_acceptance_id:\n{response_json['child_order_acceptance_id']}"
+            )
+        else:
+            response_json = response.json()
+            logger.error(response_json['error_message'])
+            self.line_notify.notify(
+                f"\n【{self.product_code} の買い注文に失敗しました】\n"
+                + f"reason:\n{response_json['error_message']}\n"
+                + f"term:\n{term}\n"
+                + f"child_order_cycle:\n{child_order_cycle}"
             )
 
     def _sell(self, term, child_order_cycle, price):
@@ -518,6 +554,16 @@ class AI:
                         + f"size:\n{size}\n"
                         + f"volume:\n{price*size}\n"
                         + f"child_order_acceptance_id:\n{response_json['child_order_acceptance_id']}"
+                    )
+                else:
+                    response_json = response.json()
+                    logger.error(response_json['error_message'])
+                    self.line_notify.notify(
+                        f"\n【{self.product_code} の売り注文に失敗しました】\n"
+                        + f"reason:\n{response_json['error_message']}\n"
+                        + f"term:\n{term}\n"
+                        + f"child_order_cycle:\n{child_order_cycle}\n"
+                        + f"related_child_order_acceptance_id:\n{related_buy_order.index[i]}"
                     )
 
     def update_unrealized_profit(self, term):
