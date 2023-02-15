@@ -5,10 +5,9 @@ from logging import (DEBUG, INFO, FileHandler, StreamHandler, basicConfig,
 from pathlib import Path
 
 import pandas as pd
-from dateutil.relativedelta import relativedelta
-
 from ai import AI
 from bitflyer_api import get_board_state
+from dateutil.relativedelta import relativedelta
 from manage import PROFIT_DIR, REF_LOCAL, VOLUME_DIR
 from preprocess import (delete_row_data, gen_execution_summaries,
                         get_executions_history, obtain_latest_summary)

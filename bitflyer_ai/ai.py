@@ -8,6 +8,7 @@ from pathlib import Path
 import pandas as pd
 from bitflyer_api import (cancel_child_order, get_balance, get_child_orders,
                           send_child_order)
+from line_notify import LineNotify
 from manage import CHILD_ORDERS_DIR, REF_LOCAL
 from utils import df_to_csv, path_exists, read_csv, rm_file
 
@@ -35,7 +36,8 @@ class AI:
                  min_local_price_gap_rate=0.03,
                  time_diff=9,
                  region='Asia/Tokyo',
-                 bucket_name=''):
+                 bucket_name='',
+                 line_notify=LineNotify()):
 
         self.product_code = product_code
         self.min_size = min_size
@@ -58,6 +60,8 @@ class AI:
             'short': pd.DataFrame(),
             'dca': pd.DataFrame(),
         }
+
+        self.line_notify = line_notify
 
         self.latest_summary = latest_summary
 
@@ -174,6 +178,16 @@ class AI:
                 logger.info(
                     f'[{self.product_code} {term} {child_order_cycle} {self.child_orders[term].at[child_order_acceptance_id, "side"]}  {child_order_acceptance_id}] 約定しました!'
                 )
+                self.line_notify.notify(
+                    "約定しました\n"
+                    + f"term:{term}\n"
+                    + f"child_order_cycle:{child_order_cycle}\n"
+                    + f"order_price:{price}\n"
+                    + f"price_discount_rate:{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
+                    + f"size:{self.child_orders[term].at[child_order_acceptance_id, 'size']}\n"
+                    + f"volume:{self.child_orders[term].at[child_order_acceptance_id, 'volume']}\n"
+                    + f"child_order_acceptance_id: {child_order_acceptance_id}"
+                )
 
             if self.child_orders[term].at[child_order_acceptance_id, 'side'] == 'SELL':
                 sell_price = self.child_orders[term].at[child_order_acceptance_id, 'price']
@@ -193,6 +207,8 @@ class AI:
 
                 self.child_orders[term].at[child_order_acceptance_id, 'profit'] = profit
                 self.child_orders[term]['cumsum_profit'] = self.child_orders[term]['profit'].cumsum()
+
+                self.line_notify.notify(f"{profit}円の利益が発生しました")
 
         # csvファイルを更新
         df_to_csv(str(self.p_child_orders_path[term]), self.child_orders[term], index=True)
@@ -431,6 +447,16 @@ class AI:
                 child_order_acceptance_id=response_json['child_order_acceptance_id'],
                 child_order_cycle=child_order_cycle,
             )
+            self.line_notify.notify(
+                f"{self.product_code}の買い注文を行いました\n"
+                + f"term:{term}\n"
+                + f"child_order_cycle:{child_order_cycle}\n"
+                + f"order_price:{price}\n"
+                + f"price_discount_rate:{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
+                + f"size:{size}\n"
+                + f"volume:{price*size}\n"
+                + f"child_order_acceptance_id: {response_json['child_order_acceptance_id']}"
+            )
 
     def _sell(self, term, child_order_cycle, price):
         if self.child_orders[term].empty:
@@ -482,6 +508,16 @@ class AI:
                         child_order_cycle=child_order_cycle,
                         related_child_order_acceptance_id=response_json['child_order_acceptance_id'],
                         child_order_acceptance_id=related_buy_order.index[i],
+                    )
+                    self.line_notify.notify(
+                        f"{self.product_code}の売り注文を行いました\n"
+                        + f"term:{term}\n"
+                        + f"child_order_cycle:{child_order_cycle}\n"
+                        + f"order_price:{price}\n"
+                        + f"price_discount_rate:{round(price/self.latest_summary['BUY']['all']['price'],3)}\n"
+                        + f"size:{size}\n"
+                        + f"volume:{price*size}\n"
+                        + f"child_order_acceptance_id: {response_json['child_order_acceptance_id']}"
                     )
 
     def update_unrealized_profit(self, term):
