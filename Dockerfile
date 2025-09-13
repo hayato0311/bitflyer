@@ -24,7 +24,7 @@ RUN pip3.8 install --upgrade pip
 RUN pip install --upgrade setuptools
 RUN pip install -r requirements-local.txt
 
-RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.1.30.zip" -o "awscliv2.zip"
+RUN curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
 RUN unzip awscliv2.zip
 RUN sudo ./aws/install
 RUN rm awscliv2.zip

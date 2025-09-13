@@ -8,7 +8,7 @@ from pathlib import Path
 import pandas as pd
 from bitflyer_api import (cancel_child_order, get_balance, get_child_orders,
                           send_child_order)
-from line_notify import LineNotify
+from line_messaging_api_client import LineMessagingAPIClient
 from manage import CHILD_ORDERS_DIR, REF_LOCAL
 from utils import df_to_csv, path_exists, read_csv, rm_file
 
@@ -37,7 +37,7 @@ class AI:
                  time_diff=9,
                  region='Asia/Tokyo',
                  bucket_name='',
-                 line_notify=LineNotify()):
+                 line_notify=LineMessagingAPIClient()):
 
         self.product_code = product_code
         self.min_size = min_size

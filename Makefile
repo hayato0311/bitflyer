@@ -1,4 +1,4 @@
 .PHONY: run
 
 run:
-	docker-compose run amazonlinux 
+	docker-compose run --rm amazonlinux
